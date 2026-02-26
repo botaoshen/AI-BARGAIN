@@ -1,0 +1,5 @@
+{
+  "name": "BargainAgent AI",
+  "description": "Your personal AI shopper that finds the best discount codes and deals in real-time using Google Search.",
+  "requestFramePermissions": []
+}
