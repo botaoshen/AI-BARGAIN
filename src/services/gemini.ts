@@ -36,6 +36,63 @@ export interface BargainResult {
   summary: string;
 }
 
+export interface GiftCardDeal {
+  title: string;
+  store: string;
+  offer: string;
+  dates: string;
+  type: "this_week" | "next_week" | "ongoing";
+}
+
+export async function getGiftCardDeals(): Promise<GiftCardDeal[]> {
+  // In a real app, this would scrape a deal database
+  // For this demo, we use the data extracted from the site
+  return [
+    {
+      title: "Apple Gift Cards",
+      store: "Woolworths",
+      offer: "20x Everyday Rewards points",
+      dates: "4 Mar - 10 Mar",
+      type: "next_week"
+    },
+    {
+      title: "Drummond Golf & Smiggle",
+      store: "Big W",
+      offer: "20x EDR points",
+      dates: "26 Feb - 4 Mar",
+      type: "this_week"
+    },
+    {
+      title: "Timezone & Hoyts",
+      store: "Big W",
+      offer: "10% Off",
+      dates: "26 Feb - 4 Mar",
+      type: "this_week"
+    },
+    {
+      title: "TCN Gift, Him, Her, Baby",
+      store: "Coles",
+      offer: "1,000 Flybuys points on $50",
+      dates: "4 Mar - 10 Mar",
+      type: "next_week"
+    },
+    {
+      title: "Luxury Escapes, DoorDash",
+      store: "Coles",
+      offer: "20x Flybuys points",
+      dates: "25 Feb - 3 Mar",
+      type: "this_week"
+    },
+    {
+      title: "Didi & Amart",
+      store: "ShopBack",
+      offer: "10% Cashback",
+      dates: "While stocks last",
+      type: "ongoing"
+    }
+  ];
+}
+
 export async function generateDiscountEmail(storeName: string): Promise<{subject: string, body: string}> {
   const model = "gemini-3-flash-preview";
   

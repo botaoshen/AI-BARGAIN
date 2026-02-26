@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { findDiscountCodes, generateDiscountEmail, BargainResult } from './services/gemini';
+import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResult, GiftCardDeal } from './services/gemini';
 import { DiscountCard } from './components/DiscountCard';
 
 export default function App() {
@@ -18,6 +18,15 @@ export default function App() {
   const [generatingEmail, setGeneratingEmail] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
+  const [giftCardDeals, setGiftCardDeals] = useState<GiftCardDeal[]>([]);
+
+  useEffect(() => {
+    const fetchGiftCards = async () => {
+      const deals = await getGiftCardDeals();
+      setGiftCardDeals(deals);
+    };
+    fetchGiftCards();
+  }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,6 +176,50 @@ export default function App() {
                   {store}
                 </button>
               ))}
+            </div>
+
+            {/* Gift Card Discounts Section */}
+            <div className="mt-12 text-left">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                    <Ticket className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Gift Card Discounts</h2>
+                    <p className="text-sm text-slate-500">Curated weekly deals for you</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {giftCardDeals.map((deal, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                    className="bg-white border border-slate-200 rounded-2xl p-4 hover:shadow-md transition-shadow group"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md uppercase tracking-wider">
+                        {deal.store}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider ${
+                        deal.type === 'next_week' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {deal.type === 'next_week' ? 'Next Week' : 'This Week'}
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{deal.title}</h3>
+                    <p className="text-sm text-slate-600 mt-1 font-medium">{deal.offer}</p>
+                    <div className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
+                      <Clock className="w-3 h-3" />
+                      <span>{deal.dates}</span>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
             </div>
 
             {/* Live Sale Alerts Section */}
