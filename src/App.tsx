@@ -29,10 +29,15 @@ export default function App() {
 
   useEffect(() => {
     const initUser = async () => {
-      let id = localStorage.getItem('bargain_user_id');
-      if (!id) {
-        id = Math.random().toString(36).substring(2, 15);
-        localStorage.setItem('bargain_user_id', id);
+      let id = null;
+      try {
+        id = localStorage.getItem('bargain_user_id');
+        if (!id) {
+          id = Math.random().toString(36).substring(2, 15);
+          localStorage.setItem('bargain_user_id', id);
+        }
+      } catch (e) {
+        id = 'guest-' + Math.random().toString(36).substring(2, 5);
       }
       setUserId(id);
 
@@ -107,9 +112,11 @@ export default function App() {
         setDailyCount(logData.newCount);
       } catch (e) {
         // Fallback to local storage for Vercel
-        const newCount = dailyCount + 1;
+        const currentLocalCount = parseInt(localStorage.getItem('bargain_count') || '0');
+        const newCount = currentLocalCount + 1;
         setDailyCount(newCount);
         localStorage.setItem('bargain_count', newCount.toString());
+        localStorage.setItem('bargain_date', new Date().toDateString());
       }
 
       const data = await findDiscountCodes(query);
