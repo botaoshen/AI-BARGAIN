@@ -37,6 +37,16 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  app.get("/api/stats", (req, res) => {
+    const count = dbService.getSavingsCount();
+    res.json({ count });
+  });
+
+  app.post("/api/stats/increment", (req, res) => {
+    dbService.incrementSavingsCount();
+    res.json({ success: true });
+  });
+
   // Daily Cron Job (Simulated)
   // In a real app, this would use Gemini to find new deals and email users
   cron.schedule("0 9 * * *", async () => {

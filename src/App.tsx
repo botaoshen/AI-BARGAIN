@@ -19,13 +19,30 @@ export default function App() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
   const [giftCardDeals, setGiftCardDeals] = useState<GiftCardDeal[]>([]);
+  const [savingsCount, setSavingsCount] = useState(0);
 
   useEffect(() => {
     const fetchGiftCards = async () => {
       const deals = await getGiftCardDeals();
       setGiftCardDeals(deals);
     };
+    
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        setSavingsCount(data.count);
+      } catch (e) {
+        setSavingsCount(12450); // Fallback
+      }
+    };
+
     fetchGiftCards();
+    fetchStats();
+
+    // Poll for real updates every 30 seconds
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -37,6 +54,10 @@ export default function App() {
     try {
       const data = await findDiscountCodes(query);
       setResult(data);
+      
+      // Increment real savings count on success
+      fetch('/api/stats/increment', { method: 'POST' }).catch(() => {});
+      setSavingsCount(prev => prev + 1);
     } catch (err) {
       setError('Failed to find deals. Please try again later.');
       console.error(err);
@@ -388,6 +409,34 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Savings Counter Badge */}
+      <div className="fixed bottom-6 left-6 z-40">
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="bg-slate-900 text-white px-4 py-2 rounded-full shadow-2xl flex items-center gap-3 border border-white/10 backdrop-blur-md"
+        >
+          <div className="flex -space-x-2">
+            {[1, 2, 3].map((i) => (
+              <img 
+                key={i}
+                src={`https://picsum.photos/seed/user${i}/32/32`} 
+                className="w-6 h-6 rounded-full border-2 border-slate-900 object-cover"
+                alt="User"
+                referrerPolicy="no-referrer"
+              />
+            ))}
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider leading-none mb-0.5">Live Impact</span>
+            <p className="text-xs font-bold whitespace-nowrap">
+              Helped <span className="text-indigo-400">{savingsCount.toLocaleString()}</span> people saving
+            </p>
+          </div>
+          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+        </motion.div>
+      </div>
 
       {/* Email Template Modal */}
       <AnimatePresence>

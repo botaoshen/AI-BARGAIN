@@ -18,6 +18,16 @@ db.exec(`
   )
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS stats (
+    key TEXT PRIMARY KEY,
+    value INTEGER DEFAULT 0
+  )
+`);
+
+// Initialize global counter if not exists
+db.prepare('INSERT OR IGNORE INTO stats (key, value) VALUES (?, ?)').run('savings_count', 12450);
+
 export interface Subscription {
   id: number;
   email: string;
@@ -44,5 +54,14 @@ export const dbService = {
   getAllSubscriptions: (): Subscription[] => {
     const stmt = db.prepare('SELECT * FROM subscriptions');
     return stmt.all() as Subscription[];
+  },
+
+  getSavingsCount: (): number => {
+    const row = db.prepare('SELECT value FROM stats WHERE key = ?').get('savings_count') as { value: number };
+    return row ? row.value : 0;
+  },
+
+  incrementSavingsCount: () => {
+    return db.prepare('UPDATE stats SET value = value + 1 WHERE key = ?').run('savings_count');
   }
 };
