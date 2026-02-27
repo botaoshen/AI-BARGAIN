@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard } from 'lucide-react';
+import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResult, GiftCardDeal } from './services/gemini';
 import { DiscountCard } from './components/DiscountCard';
@@ -19,60 +19,99 @@ export default function App() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
   const [giftCardDeals, setGiftCardDeals] = useState<GiftCardDeal[]>([]);
-  const [savingsCount, setSavingsCount] = useState(0);
+
+  // User & Limits State
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userTier, setUserTier] = useState<'free' | 'pro'>('free');
+  const [dailyCount, setDailyCount] = useState(0);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
+    const initUser = async () => {
+      let id = localStorage.getItem('bargain_user_id');
+      if (!id) {
+        id = Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('bargain_user_id', id);
+      }
+      setUserId(id);
+
+      try {
+        const res = await fetch('/api/user/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: id })
+        });
+        const data = await res.json();
+        if (data.user) {
+          setUserTier(data.user.tier);
+          setDailyCount(data.dailyCount);
+        }
+      } catch (err) {
+        console.error("Failed to init user", err);
+      }
+    };
+
     const fetchGiftCards = async () => {
       const deals = await getGiftCardDeals();
       setGiftCardDeals(deals);
     };
     
-    const fetchStats = async () => {
-      try {
-        const res = await fetch('/api/stats');
-        const data = await res.json();
-        // Only update if the server count is higher to avoid jumping backwards
-        setSavingsCount(prev => Math.max(prev, data.count));
-      } catch (e) {
-        if (savingsCount === 0) setSavingsCount(12450);
-      }
-    };
-
+    initUser();
     fetchGiftCards();
-    fetchStats();
-
-    // 1. Real sync every 20 seconds
-    const syncInterval = setInterval(fetchStats, 20000);
-    
-    // 2. Visual "trending" increment every 8-12 seconds to make it feel alive
-    const trendInterval = setInterval(() => {
-      setSavingsCount(prev => prev + 1);
-    }, 10000);
-
-    return () => {
-      clearInterval(syncInterval);
-      clearInterval(trendInterval);
-    };
   }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
+    if (!query.trim() || !userId) return;
+
+    // Check limit client-side first for better UX
+    if (userTier === 'free' && dailyCount >= 5) {
+      setShowUpgradeModal(true);
+      return;
+    }
 
     setLoading(true);
     setError(null);
     try {
+      // Log search and check limit server-side
+      const logRes = await fetch('/api/user/log-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+
+      if (logRes.status === 403) {
+        setShowUpgradeModal(true);
+        setLoading(false);
+        return;
+      }
+
+      const logData = await logRes.json();
+      setDailyCount(logData.newCount);
+
       const data = await findDiscountCodes(query);
       setResult(data);
-      
-      // Increment real savings count on success
-      fetch('/api/stats/increment', { method: 'POST' }).catch(() => {});
-      setSavingsCount(prev => prev + 1);
     } catch (err) {
       setError('Failed to find deals. Please try again later.');
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpgrade = () => {
+    if (!userId) return;
+    
+    // Added /4.99 to pre-fill the amount
+    const paymentLink = "https://paypal.me/botaoshen/4.99";
+    
+    // 1. Try to open in a new tab immediately (best for bypassing iframe restrictions)
+    const newWin = window.open(paymentLink, '_blank');
+    
+    // 4. If window.open failed (popup blocked), we'll let the user click the manual link in the UI
+    if (!newWin) {
+      setError("Popup blocked. Please click the manual link below or enable popups.");
     }
   };
 
@@ -103,6 +142,10 @@ export default function App() {
 
   const handleGenerateEmail = async () => {
     if (!result) return;
+    if (userTier === 'free') {
+      setShowUpgradeModal(true);
+      return;
+    }
     setGeneratingEmail(true);
     setShowEmailModal(true);
     try {
@@ -133,9 +176,48 @@ export default function App() {
             </div>
             <span className="font-bold text-xl tracking-tight text-slate-900">BargainAgent</span>
           </div>
-          <div className="hidden sm:flex items-center gap-6 text-sm font-medium text-slate-500">
-            <a href="#" className="hover:text-indigo-600 transition-colors">How it works</a>
-            <a href="#" className="hover:text-indigo-600 transition-colors">Popular Stores</a>
+          <div className="flex items-center gap-3 sm:gap-6 text-sm font-medium text-slate-500">
+            <div className={`flex items-center gap-2 px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs transition-all ${
+              userTier === 'pro' 
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' 
+                : 'bg-slate-100 text-slate-600'
+            }`}>
+              {userTier === 'pro' && <Zap className="w-3 h-3 fill-current" />}
+              <span className="font-bold">
+                {userTier === 'pro' ? 'PRO' : 'Free'}
+              </span>
+              {userTier === 'free' && (
+                <span className="text-slate-400 hidden xs:inline border-l border-slate-200 ml-1 pl-2">
+                  {5 - dailyCount} left
+                </span>
+              )}
+            </div>
+            <a href="#" className="hidden md:inline hover:text-indigo-600 transition-colors">How it works</a>
+            {userTier === 'pro' && (
+              <button 
+                onClick={async () => {
+                  if (!userId) return;
+                  await fetch('/api/user/reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId })
+                  });
+                  setUserTier('free');
+                  setDailyCount(0);
+                }}
+                className="text-xs text-slate-400 hover:text-red-500 transition-colors underline"
+              >
+                Reset (Test)
+              </button>
+            )}
+            {userTier === 'free' && (
+              <button 
+                onClick={() => setShowUpgradeModal(true)}
+                className="bg-indigo-600 text-white px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-100"
+              >
+                Upgrade
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -374,6 +456,10 @@ export default function App() {
                   <Mail className="w-8 h-8 text-indigo-600" />
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 mb-2">No luck? Ask them directly!</h3>
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-md text-[10px] font-bold uppercase tracking-wider mb-4">
+                  <Zap className="w-3 h-3 fill-current" />
+                  PRO Feature
+                </div>
                 <p className="text-slate-600 mb-6 max-w-md mx-auto">
                   Let our AI write a persuasive, polite email to {result.storeName} explaining you're a loyal student fan on a budget.
                 </p>
@@ -381,8 +467,8 @@ export default function App() {
                   onClick={handleGenerateEmail}
                   className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-sm flex items-center gap-2 mx-auto"
                 >
-                  <Sparkles className="w-5 h-5" />
-                  Generate "Student Begging" Email
+                  {userTier === 'free' ? <ShieldCheck className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                  {userTier === 'free' ? 'Unlock PRO to Generate Email' : 'Generate "Student Begging" Email'}
                 </button>
               </div>
             </motion.div>
@@ -419,34 +505,6 @@ export default function App() {
           </div>
         </div>
       </footer>
-
-      {/* Savings Counter Badge */}
-      <div className="fixed bottom-6 left-6 z-40">
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="bg-slate-900 text-white px-4 py-2 rounded-full shadow-2xl flex items-center gap-3 border border-white/10 backdrop-blur-md"
-        >
-          <div className="flex -space-x-2">
-            {[1, 2, 3].map((i) => (
-              <img 
-                key={i}
-                src={`https://picsum.photos/seed/user${i}/32/32`} 
-                className="w-6 h-6 rounded-full border-2 border-slate-900 object-cover"
-                alt="User"
-                referrerPolicy="no-referrer"
-              />
-            ))}
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider leading-none mb-0.5">Live Impact</span>
-            <p className="text-xs font-bold whitespace-nowrap">
-              Helped <span className="text-indigo-400">{savingsCount.toLocaleString()}</span> people saving
-            </p>
-          </div>
-          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-        </motion.div>
-      </div>
 
       {/* Email Template Modal */}
       <AnimatePresence>
@@ -571,6 +629,90 @@ export default function App() {
                     </button>
                   </form>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Upgrade Modal */}
+      <AnimatePresence>
+        {showUpgradeModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowUpgradeModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="bg-indigo-600 p-8 text-white relative overflow-hidden">
+                <Zap className="absolute -right-4 -top-4 w-32 h-32 opacity-10 rotate-12" />
+                <div className="relative z-10">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full text-xs font-bold mb-4 backdrop-blur-sm">
+                    <Zap className="w-3 h-3 fill-current" />
+                    UNLIMITED ACCESS
+                  </div>
+                  <h3 className="text-3xl font-bold mb-2">Upgrade to PRO</h3>
+                  <p className="text-indigo-100 opacity-90">Unlock unlimited searches and premium features.</p>
+                </div>
+              </div>
+
+              <div className="p-8">
+                {dailyCount >= 5 && userTier === 'free' && (
+                  <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-amber-900">Daily limit reached</p>
+                      <p className="text-xs text-amber-700">You've used all 5 free searches for today. Upgrade now to keep searching!</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-4 mb-8">
+                  {[
+                    { icon: <Zap className="w-4 h-4" />, text: "Unlimited real-time searches" },
+                    { icon: <ShieldCheck className="w-4 h-4" />, text: "Priority deal verification" },
+                    { icon: <Mail className="w-4 h-4" />, text: "Instant email alerts for new codes" },
+                    { icon: <Sparkles className="w-4 h-4" />, text: "AI-powered custom email templates" }
+                  ].map((feature, i) => (
+                    <div key={i} className="flex items-center gap-3 text-slate-600">
+                      <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        {feature.icon}
+                      </div>
+                      <span className="text-sm font-medium">{feature.text}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={handleUpgrade}
+                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 text-center"
+                  >
+                    Upgrade Now - $4.99/mo
+                  </button>
+                  <a 
+                    href="https://paypal.me/botaoshen/4.99" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-indigo-600 font-medium hover:underline"
+                  >
+                    Click here if the page didn't open
+                  </a>
+                  <button
+                    onClick={() => setShowUpgradeModal(false)}
+                    className="w-full py-2 text-slate-400 text-sm font-medium hover:text-slate-600 transition-colors"
+                  >
+                    Maybe later
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

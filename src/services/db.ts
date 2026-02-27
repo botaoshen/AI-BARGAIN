@@ -19,14 +19,22 @@ db.exec(`
 `);
 
 db.exec(`
-  CREATE TABLE IF NOT EXISTS stats (
-    key TEXT PRIMARY KEY,
-    value INTEGER DEFAULT 0
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE,
+    tier TEXT DEFAULT 'free', -- 'free' or 'pro'
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `);
 
-// Initialize global counter if not exists
-db.prepare('INSERT OR IGNORE INTO stats (key, value) VALUES (?, ?)').run('savings_count', 12450);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS search_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    search_date DATE DEFAULT (DATE('now')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
 
 export interface Subscription {
   id: number;
@@ -35,7 +43,44 @@ export interface Subscription {
   created_at: string;
 }
 
+export interface User {
+  id: string;
+  email: string | null;
+  tier: 'free' | 'pro';
+}
+
 export const dbService = {
+  getUser: (userId: string): User | null => {
+    const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
+    return stmt.get(userId) as User | null;
+  },
+
+  createUser: (userId: string, tier: string = 'free') => {
+    const stmt = db.prepare('INSERT OR IGNORE INTO users (id, tier) VALUES (?, ?)');
+    return stmt.run(userId, tier);
+  },
+
+  upgradeUser: (userId: string) => {
+    const stmt = db.prepare("UPDATE users SET tier = 'pro' WHERE id = ?");
+    return stmt.run(userId);
+  },
+
+  resetUser: (userId: string) => {
+    const stmt = db.prepare("UPDATE users SET tier = 'free' WHERE id = ?");
+    return stmt.run(userId);
+  },
+
+  getDailySearchCount: (userId: string): number => {
+    const stmt = db.prepare("SELECT COUNT(*) as count FROM search_logs WHERE user_id = ? AND search_date = DATE('now')");
+    const result = stmt.get(userId) as { count: number };
+    return result ? result.count : 0;
+  },
+
+  logSearch: (userId: string) => {
+    const stmt = db.prepare('INSERT INTO search_logs (user_id) VALUES (?)');
+    return stmt.run(userId);
+  },
+
   subscribe: (email: string, storeName: string) => {
     const stmt = db.prepare('INSERT OR IGNORE INTO subscriptions (email, store_name) VALUES (?, ?)');
     return stmt.run(email, storeName);
@@ -54,14 +99,5 @@ export const dbService = {
   getAllSubscriptions: (): Subscription[] => {
     const stmt = db.prepare('SELECT * FROM subscriptions');
     return stmt.all() as Subscription[];
-  },
-
-  getSavingsCount: (): number => {
-    const row = db.prepare('SELECT value FROM stats WHERE key = ?').get('savings_count') as { value: number };
-    return row ? row.value : 0;
-  },
-
-  incrementSavingsCount: () => {
-    return db.prepare('UPDATE stats SET value = value + 1 WHERE key = ?').run('savings_count');
   }
 };

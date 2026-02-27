@@ -37,16 +37,78 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  app.get("/api/stats", (req, res) => {
-    const count = dbService.getSavingsCount();
-    console.log(`[Stats] Current savings count: ${count}`);
-    res.json({ count });
+  // User Management
+  app.post("/api/user/init", (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
+      dbService.createUser(userId);
+      const user = dbService.getUser(userId);
+      const count = dbService.getDailySearchCount(userId);
+      res.json({ user, dailyCount: count });
+    } catch (error) {
+      console.error("Error in /api/user/init:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
   });
 
-  app.post("/api/stats/increment", (req, res) => {
-    dbService.incrementSavingsCount();
-    console.log(`[Stats] Incremented savings count`);
-    res.json({ success: true });
+  app.get("/api/user/:userId", (req, res) => {
+    try {
+      const { userId } = req.params;
+      const user = dbService.getUser(userId);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      const count = dbService.getDailySearchCount(userId);
+      res.json({ user, dailyCount: count });
+    } catch (error) {
+      console.error("Error in /api/user/:userId:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/user/upgrade", (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
+      dbService.upgradeUser(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error in /api/user/upgrade:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Temporary endpoint to reset user tier for testing
+  app.post("/api/user/reset", (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
+      dbService.resetUser(userId);
+      res.json({ success: true, message: "User reset to free tier" });
+    } catch (error) {
+      console.error("Error in /api/user/reset:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/user/log-search", (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
+      
+      const user = dbService.getUser(userId);
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      const count = dbService.getDailySearchCount(userId);
+      if (user.tier === 'free' && count >= 5) {
+        return res.status(403).json({ error: "Daily limit reached" });
+      }
+
+      dbService.logSearch(userId);
+      res.json({ success: true, newCount: count + 1 });
+    } catch (error) {
+      console.error("Error in /api/user/log-search:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
   });
 
   // Daily Cron Job (Simulated)
