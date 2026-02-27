@@ -31,18 +31,28 @@ export default function App() {
       try {
         const res = await fetch('/api/stats');
         const data = await res.json();
-        setSavingsCount(data.count);
+        // Only update if the server count is higher to avoid jumping backwards
+        setSavingsCount(prev => Math.max(prev, data.count));
       } catch (e) {
-        setSavingsCount(12450); // Fallback
+        if (savingsCount === 0) setSavingsCount(12450);
       }
     };
 
     fetchGiftCards();
     fetchStats();
 
-    // Poll for real updates every 30 seconds
-    const interval = setInterval(fetchStats, 30000);
-    return () => clearInterval(interval);
+    // 1. Real sync every 20 seconds
+    const syncInterval = setInterval(fetchStats, 20000);
+    
+    // 2. Visual "trending" increment every 8-12 seconds to make it feel alive
+    const trendInterval = setInterval(() => {
+      setSavingsCount(prev => prev + 1);
+    }, 10000);
+
+    return () => {
+      clearInterval(syncInterval);
+      clearInterval(trendInterval);
+    };
   }, []);
 
   const handleSearch = async (e: React.FormEvent) => {

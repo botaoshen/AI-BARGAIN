@@ -39,11 +39,13 @@ async function startServer() {
 
   app.get("/api/stats", (req, res) => {
     const count = dbService.getSavingsCount();
+    console.log(`[Stats] Current savings count: ${count}`);
     res.json({ count });
   });
 
   app.post("/api/stats/increment", (req, res) => {
     dbService.incrementSavingsCount();
+    console.log(`[Stats] Incremented savings count`);
     res.json({ success: true });
   });
 
