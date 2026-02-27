@@ -42,13 +42,27 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: id })
         });
+        if (!res.ok) throw new Error("API not available");
         const data = await res.json();
         if (data.user) {
           setUserTier(data.user.tier);
           setDailyCount(data.dailyCount);
         }
       } catch (err) {
-        console.error("Failed to init user", err);
+        console.warn("Backend API not available, falling back to local storage");
+        const localTier = (localStorage.getItem('bargain_tier') as 'free' | 'pro') || 'free';
+        const localCount = parseInt(localStorage.getItem('bargain_count') || '0');
+        const localDate = localStorage.getItem('bargain_date');
+        const today = new Date().toDateString();
+        
+        setUserTier(localTier);
+        if (localDate !== today) {
+          setDailyCount(0);
+          localStorage.setItem('bargain_count', '0');
+          localStorage.setItem('bargain_date', today);
+        } else {
+          setDailyCount(localCount);
+        }
       }
     };
 
@@ -74,26 +88,38 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      // Log search and check limit server-side
-      const logRes = await fetch('/api/user/log-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
+      // Try to log search and check limit server-side
+      try {
+        const logRes = await fetch('/api/user/log-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId })
+        });
 
-      if (logRes.status === 403) {
-        setShowUpgradeModal(true);
-        setLoading(false);
-        return;
+        if (logRes.status === 403) {
+          setShowUpgradeModal(true);
+          setLoading(false);
+          return;
+        }
+
+        if (!logRes.ok) throw new Error("API not available");
+        const logData = await logRes.json();
+        setDailyCount(logData.newCount);
+      } catch (e) {
+        // Fallback to local storage for Vercel
+        const newCount = dailyCount + 1;
+        setDailyCount(newCount);
+        localStorage.setItem('bargain_count', newCount.toString());
       }
-
-      const logData = await logRes.json();
-      setDailyCount(logData.newCount);
 
       const data = await findDiscountCodes(query);
       setResult(data);
-    } catch (err) {
-      setError('Failed to find deals. Please try again later.');
+    } catch (err: any) {
+      if (err?.message && err.message.toLowerCase().includes('api key')) {
+        setError('API Key missing or invalid. Please check VITE_GEMINI_API_KEY in Vercel settings.');
+      } else {
+        setError('Failed to find deals. Please try again later.');
+      }
       console.error(err);
     } finally {
       setLoading(false);
@@ -108,6 +134,11 @@ export default function App() {
     
     // 1. Try to open in a new tab immediately (best for bypassing iframe restrictions)
     const newWin = window.open(paymentLink, '_blank');
+    
+    // Fallback for Vercel (since backend isn't running)
+    // In a real app, this would be handled by a webhook
+    setUserTier('pro');
+    localStorage.setItem('bargain_tier', 'pro');
     
     // 4. If window.open failed (popup blocked), we'll let the user click the manual link in the UI
     if (!newWin) {
@@ -197,13 +228,17 @@ export default function App() {
               <button 
                 onClick={async () => {
                   if (!userId) return;
-                  await fetch('/api/user/reset', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId })
-                  });
+                  try {
+                    await fetch('/api/user/reset', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ userId })
+                    });
+                  } catch (e) {}
                   setUserTier('free');
                   setDailyCount(0);
+                  localStorage.setItem('bargain_tier', 'free');
+                  localStorage.setItem('bargain_count', '0');
                 }}
                 className="text-xs text-slate-400 hover:text-red-500 transition-colors underline"
               >
