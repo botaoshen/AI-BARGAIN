@@ -3,6 +3,7 @@ import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2
 import { motion, AnimatePresence } from 'motion/react';
 import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResult, GiftCardDeal } from './services/gemini';
 import { DiscountCard } from './components/DiscountCard';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 export default function App() {
   const [query, setQuery] = useState('');
@@ -576,6 +577,7 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+      <SpeedInsights />
     </div>
   );
 }
