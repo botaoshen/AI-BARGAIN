@@ -1,7 +1,21 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// The platform injects the API key into process.env.GEMINI_API_KEY
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Safely retrieve the API key without crashing the browser on Vercel
+const getApiKey = () => {
+  // 1. AI Studio environment
+  if (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) {
+    return process.env.GEMINI_API_KEY;
+  }
+  
+  // 2. Vercel / Standard Vite environment (Requires VITE_ prefix)
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_GEMINI_API_KEY) {
+    return (import.meta as any).env.VITE_GEMINI_API_KEY;
+  }
+
+  return "";
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 export interface DiscountCode {
   code: string;
