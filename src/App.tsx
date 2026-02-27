@@ -85,7 +85,7 @@ export default function App() {
     if (!query.trim() || !userId) return;
 
     // Check limit client-side first for better UX
-    if (userTier === 'free' && dailyCount >= 3) {
+    if (userTier === 'free' && dailyCount >= 10) {
       setShowUpgradeModal(true);
       return;
     }
@@ -226,7 +226,7 @@ export default function App() {
               </span>
               {userTier === 'free' && (
                 <span className="text-slate-400 border-l border-slate-200 ml-1 pl-2">
-                  {3 - dailyCount} left
+                  {10 - dailyCount} left
                 </span>
               )}
             </div>
@@ -707,12 +707,12 @@ export default function App() {
               </div>
 
               <div className="p-8">
-                {dailyCount >= 3 && userTier === 'free' && (
+                {dailyCount >= 10 && userTier === 'free' && (
                   <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-bold text-amber-900">Daily limit reached</p>
-                      <p className="text-xs text-amber-700">You've used all 3 free searches for today. Upgrade now to keep searching!</p>
+                      <p className="text-xs text-amber-700">You've used all 10 free searches for today. Upgrade now to keep searching!</p>
                     </div>
                   </div>
                 )}

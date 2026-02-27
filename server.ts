@@ -99,7 +99,7 @@ async function startServer() {
       if (!user) return res.status(404).json({ error: "User not found" });
 
       const count = dbService.getDailySearchCount(userId);
-      if (user.tier === 'free' && count >= 3) {
+      if (user.tier === 'free' && count >= 10) {
         return res.status(403).json({ error: "Daily limit reached" });
       }
 
