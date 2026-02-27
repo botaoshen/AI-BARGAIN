@@ -1,23 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Use import.meta.env for Vite compatibility. 
-// Fallback to process.env for local dev server if needed, but safely.
-const getApiKey = () => {
-  // 1. Check Vite's import.meta.env (standard for client-side Vite apps)
-  const metaEnv = (import.meta as any).env;
-  if (typeof import.meta !== 'undefined' && metaEnv?.VITE_GEMINI_API_KEY) {
-    return metaEnv.VITE_GEMINI_API_KEY;
-  }
-  
-  // 2. Fallback to process.env (for local dev server or Node environments)
-  if (typeof process !== 'undefined' && (process as any).env?.GEMINI_API_KEY) {
-    return (process as any).env.GEMINI_API_KEY;
-  }
-
-  return "";
-};
-
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+// The platform injects the API key into process.env.GEMINI_API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export interface DiscountCode {
   code: string;
