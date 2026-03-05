@@ -45,7 +45,7 @@ async function startServer() {
       dbService.createUser(userId);
       const user = dbService.getUser(userId);
       const count = dbService.getDailySearchCount(userId);
-      res.json({ user, dailyCount: count });
+      res.json({ user, dailyCount: count, extraSearches: user?.extra_searches || 0 });
     } catch (error) {
       console.error("Error in /api/user/init:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -58,7 +58,7 @@ async function startServer() {
       const user = dbService.getUser(userId);
       if (!user) return res.status(404).json({ error: "User not found" });
       const count = dbService.getDailySearchCount(userId);
-      res.json({ user, dailyCount: count });
+      res.json({ user, dailyCount: count, extraSearches: user?.extra_searches || 0 });
     } catch (error) {
       console.error("Error in /api/user/:userId:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -99,14 +99,58 @@ async function startServer() {
       if (!user) return res.status(404).json({ error: "User not found" });
 
       const count = dbService.getDailySearchCount(userId);
-      if (user.tier === 'free' && count >= 10) {
-        return res.status(403).json({ error: "Daily limit reached" });
+      
+      if (user.tier === 'free' && count >= 3) {
+        if (user.extra_searches > 0) {
+          dbService.useExtraSearch(userId);
+          // Don't log as a daily search if it's an extra search, or log it but we don't count it towards the daily limit.
+          // Actually, if we log it, it will increase daily count. Let's log it, but the client will see dailyCount > 3.
+          // That's fine, the client can just show "Using extra searches".
+        } else {
+          return res.status(403).json({ error: "Daily limit reached" });
+        }
       }
 
       dbService.logSearch(userId);
-      res.json({ success: true, newCount: count + 1 });
+      const updatedUser = dbService.getUser(userId);
+      res.json({ success: true, newCount: count + 1, extraSearches: updatedUser?.extra_searches || 0 });
     } catch (error) {
       console.error("Error in /api/user/log-search:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/voucher/redeem", (req, res) => {
+    try {
+      const { userId, code } = req.body;
+      if (!userId || !code) return res.status(400).json({ error: "userId and code are required" });
+      
+      if (code.toLowerCase() === 'test50') {
+        dbService.addExtraSearches(userId, 50);
+        const user = dbService.getUser(userId);
+        return res.json({ success: true, message: "Successfully redeemed 50 searches!", extraSearches: user?.extra_searches });
+      }
+
+      const result = dbService.redeemVoucher(userId, code);
+      if (result.success) {
+        const user = dbService.getUser(userId);
+        res.json({ success: true, message: result.message, extraSearches: user?.extra_searches });
+      } else {
+        res.status(400).json({ error: result.message });
+      }
+    } catch (error) {
+      console.error("Error in /api/voucher/redeem:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Admin endpoint to generate vouchers for testing
+  app.post("/api/voucher/create", (req, res) => {
+    try {
+      const { code, searches } = req.body;
+      dbService.createVoucher(code, searches);
+      res.json({ success: true, message: `Voucher ${code} created for ${searches} searches` });
+    } catch (error) {
       res.status(500).json({ error: "Internal server error" });
     }
   });

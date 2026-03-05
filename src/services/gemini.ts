@@ -30,6 +30,7 @@ export interface DiscountCode {
 
 export interface BargainResult {
   storeName: string;
+  storeUrl: string;
   codes: DiscountCode[];
   summary: string;
 }
@@ -44,48 +45,48 @@ export interface GiftCardDeal {
 
 export async function getGiftCardDeals(): Promise<GiftCardDeal[]> {
   // In a real app, this would scrape a deal database
-  // For this demo, we use the data extracted from the site
+  // For this demo, we use the data extracted from gcdb.com.au
   return [
     {
       title: "Apple Gift Cards",
       store: "Woolworths",
       offer: "20x Everyday Rewards points",
-      dates: "4 Mar - 10 Mar",
-      type: "next_week"
-    },
-    {
-      title: "Drummond Golf & Smiggle",
-      store: "Big W",
-      offer: "20x EDR points",
-      dates: "26 Feb - 4 Mar",
+      dates: "Latest Offer",
       type: "this_week"
     },
     {
-      title: "Timezone & Hoyts",
-      store: "Big W",
-      offer: "10% Off",
-      dates: "26 Feb - 4 Mar",
+      title: "Ultimate, Webjet & Timezone",
+      store: "Woolworths",
+      offer: "20x Everyday Rewards points",
+      dates: "Latest Offer",
       type: "this_week"
     },
     {
-      title: "TCN Gift, Him, Her, Baby",
+      title: "TCN Cinema, Pamper, Pub & Bar",
+      store: "Coles",
+      offer: "2,000 Flybuys points",
+      dates: "Latest Offer",
+      type: "this_week"
+    },
+    {
+      title: "TCN Gift, Him, Her, Baby & Restaurant",
       store: "Coles",
       offer: "1,000 Flybuys points on $50",
-      dates: "4 Mar - 10 Mar",
+      dates: "Latest Offer",
       type: "next_week"
     },
     {
-      title: "Luxury Escapes, DoorDash",
-      store: "Coles",
-      offer: "20x Flybuys points",
-      dates: "25 Feb - 3 Mar",
-      type: "this_week"
+      title: "Woolworths & Big W",
+      store: "Everyday Gifting",
+      offer: "3% off + 1x EDR point per dollar",
+      dates: "Ongoing",
+      type: "ongoing"
     },
     {
-      title: "Didi & Amart",
-      store: "ShopBack",
-      offer: "10% Cashback",
-      dates: "While stocks last",
+      title: "Woolworths, Amazon, Airbnb & Bunnings",
+      store: "Qantas Marketplace",
+      offer: "3x Qantas points",
+      dates: "Ongoing",
       type: "ongoing"
     }
   ];
@@ -149,6 +150,8 @@ export async function findDiscountCodes(storeName: string): Promise<BargainResul
   - Provider Perks (Origin Energy, AGL, Telstra, Bupa, etc.).
   - Annual/Family & Friends Sale Alerts.
   
+  Also, find the official website URL for the store (storeUrl).
+  
   Return JSON format.`;
 
   try {
@@ -162,6 +165,7 @@ export async function findDiscountCodes(storeName: string): Promise<BargainResul
           type: Type.OBJECT,
           properties: {
             storeName: { type: Type.STRING },
+            storeUrl: { type: Type.STRING },
             summary: { type: Type.STRING },
             codes: {
               type: Type.ARRAY,
@@ -181,7 +185,7 @@ export async function findDiscountCodes(storeName: string): Promise<BargainResul
               }
             }
           },
-          required: ["storeName", "codes", "summary"]
+          required: ["storeName", "storeUrl", "codes", "summary"]
         }
       },
     });

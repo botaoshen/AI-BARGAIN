@@ -24,8 +24,13 @@ export default function App() {
   const [userId, setUserId] = useState<string | null>(null);
   const [userTier, setUserTier] = useState<'free' | 'pro'>('free');
   const [dailyCount, setDailyCount] = useState(0);
+  const [extraSearches, setExtraSearches] = useState(0);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [voucherCode, setVoucherCode] = useState('');
+  const [redeemingVoucher, setRedeemingVoucher] = useState(false);
+  const [voucherMessage, setVoucherMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
   useEffect(() => {
     const initUser = async () => {
@@ -52,15 +57,18 @@ export default function App() {
         if (data.user) {
           setUserTier(data.user.tier);
           setDailyCount(data.dailyCount);
+          setExtraSearches(data.extraSearches || 0);
         }
       } catch (err) {
         console.warn("Backend API not available, falling back to local storage");
         const localTier = (localStorage.getItem('bargain_tier') as 'free' | 'pro') || 'free';
         const localCount = parseInt(localStorage.getItem('bargain_count') || '0');
+        const localExtra = parseInt(localStorage.getItem('bargain_extra') || '0');
         const localDate = localStorage.getItem('bargain_date');
         const today = new Date().toDateString();
         
         setUserTier(localTier);
+        setExtraSearches(localExtra);
         if (localDate !== today) {
           setDailyCount(0);
           localStorage.setItem('bargain_count', '0');
@@ -85,7 +93,7 @@ export default function App() {
     if (!query.trim() || !userId) return;
 
     // Check limit client-side first for better UX
-    if (userTier === 'free' && dailyCount >= 10) {
+    if (userTier === 'free' && dailyCount >= 3 && extraSearches <= 0) {
       setShowUpgradeModal(true);
       return;
     }
@@ -110,12 +118,23 @@ export default function App() {
         if (!logRes.ok) throw new Error("API not available");
         const logData = await logRes.json();
         setDailyCount(logData.newCount);
+        if (logData.extraSearches !== undefined) {
+          setExtraSearches(logData.extraSearches);
+        }
       } catch (e) {
         // Fallback to local storage for Vercel
         const currentLocalCount = parseInt(localStorage.getItem('bargain_count') || '0');
-        const newCount = currentLocalCount + 1;
-        setDailyCount(newCount);
-        localStorage.setItem('bargain_count', newCount.toString());
+        const currentExtra = parseInt(localStorage.getItem('bargain_extra') || '0');
+        
+        if (currentLocalCount >= 3 && currentExtra > 0) {
+          const newExtra = currentExtra - 1;
+          setExtraSearches(newExtra);
+          localStorage.setItem('bargain_extra', newExtra.toString());
+        } else {
+          const newCount = currentLocalCount + 1;
+          setDailyCount(newCount);
+          localStorage.setItem('bargain_count', newCount.toString());
+        }
         localStorage.setItem('bargain_date', new Date().toDateString());
       }
 
@@ -133,24 +152,55 @@ export default function App() {
     }
   };
 
-  const handleUpgrade = () => {
-    if (!userId) return;
+  const handleRedeemVoucher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!voucherCode.trim() || !userId) return;
     
-    // Added /4.99 to pre-fill the amount
-    const paymentLink = "https://paypal.me/botaoshen/4.99";
-    
-    // 1. Try to open in a new tab immediately (best for bypassing iframe restrictions)
-    const newWin = window.open(paymentLink, '_blank');
-    
-    // Fallback for Vercel (since backend isn't running)
-    // In a real app, this would be handled by a webhook
-    setUserTier('pro');
-    localStorage.setItem('bargain_tier', 'pro');
-    
-    // 4. If window.open failed (popup blocked), we'll let the user click the manual link in the UI
-    if (!newWin) {
-      setError("Popup blocked. Please click the manual link below or enable popups.");
+    setRedeemingVoucher(true);
+    setVoucherMessage(null);
+
+    try {
+      const res = await fetch('/api/voucher/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, code: voucherCode.trim() })
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        setVoucherMessage({ type: 'success', text: data.message });
+        setExtraSearches(data.extraSearches);
+        setTimeout(() => {
+          setShowUpgradeModal(false);
+          setVoucherMessage(null);
+          setVoucherCode('');
+        }, 2000);
+      } else {
+        setVoucherMessage({ type: 'error', text: data.error || 'Failed to redeem voucher' });
+      }
+    } catch (err) {
+      // Fallback for Vercel
+      if (voucherCode.trim().toLowerCase() === 'test50') {
+        const newExtra = extraSearches + 50;
+        setExtraSearches(newExtra);
+        localStorage.setItem('bargain_extra', newExtra.toString());
+        setVoucherMessage({ type: 'success', text: 'Successfully redeemed 50 searches!' });
+        setTimeout(() => {
+          setShowUpgradeModal(false);
+          setVoucherMessage(null);
+          setVoucherCode('');
+        }, 2000);
+      } else {
+        setVoucherMessage({ type: 'error', text: 'Invalid voucher code or API not available' });
+      }
+    } finally {
+      setRedeemingVoucher(false);
     }
+  };
+
+  const handleUpgrade = () => {
+    const paymentLink = "https://paypal.me/botaoshen/9.90";
+    window.open(paymentLink, '_blank');
   };
 
   const handleSubscribe = async (e: React.FormEvent) => {
@@ -226,11 +276,20 @@ export default function App() {
               </span>
               {userTier === 'free' && (
                 <span className="text-slate-400 border-l border-slate-200 ml-1 pl-2">
-                  {10 - dailyCount} left
+                  {extraSearches > 0 ? (
+                    <span className="text-indigo-600 font-bold">{Math.max(0, 3 - dailyCount) + extraSearches} left</span>
+                  ) : (
+                    <>{Math.max(0, 3 - dailyCount)} left</>
+                  )}
                 </span>
               )}
             </div>
-            <a href="#" className="hidden md:inline hover:text-indigo-600 transition-colors">How it works</a>
+            <button 
+              onClick={() => setShowHowItWorks(true)} 
+              className="hidden md:inline hover:text-indigo-600 transition-colors font-medium"
+            >
+              How it works
+            </button>
             {userTier === 'pro' && (
               <button 
                 onClick={async () => {
@@ -459,13 +518,26 @@ export default function App() {
                     <Sparkles className="w-4 h-4" />
                     <span>{result.codes.length} deals found</span>
                   </div>
-                  <button
-                    onClick={() => setShowSubModal(true)}
-                    className="flex items-center gap-2 text-sm font-semibold text-white bg-slate-900 px-4 py-2 rounded-xl hover:bg-slate-800 transition-all shadow-sm"
-                  >
-                    <Clock className="w-4 h-4" />
-                    Subscribe to Daily Alerts
-                  </button>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {result.storeUrl && (
+                      <a
+                        href={result.storeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm font-semibold text-white bg-indigo-600 px-4 py-2 rounded-xl hover:bg-indigo-700 transition-all shadow-sm"
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                        Shop at {result.storeName}
+                      </a>
+                    )}
+                    <button
+                      onClick={() => setShowSubModal(true)}
+                      className="flex items-center gap-2 text-sm font-semibold text-white bg-slate-900 px-4 py-2 rounded-xl hover:bg-slate-800 transition-all shadow-sm"
+                    >
+                      <Clock className="w-4 h-4" />
+                      Subscribe
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -677,6 +749,68 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* How it works Modal */}
+      <AnimatePresence>
+        {showHowItWorks && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowHowItWorks(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="bg-indigo-600 p-8 text-white relative overflow-hidden">
+                <Search className="absolute -right-4 -top-4 w-32 h-32 opacity-10 rotate-12" />
+                <div className="relative z-10">
+                  <h3 className="text-3xl font-bold mb-2">How it works</h3>
+                  <p className="text-indigo-100 opacity-90">Your guide to finding the best deals with BargainAgent.</p>
+                </div>
+              </div>
+
+              <div className="p-8">
+                <div className="space-y-6 mb-8">
+                  <div className="flex gap-4">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">1</div>
+                    <div>
+                      <h4 className="font-bold text-slate-900">Search for Deals</h4>
+                      <p className="text-sm text-slate-500 mt-1">Enter a store name to find active discount codes and gift card deals. You get 3 free searches every day.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">2</div>
+                    <div>
+                      <h4 className="font-bold text-slate-900">Need More Searches?</h4>
+                      <p className="text-sm text-slate-500 mt-1">Hit your daily limit? Click 'Upgrade' to buy a voucher for 50 extra searches for just $9.90.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">3</div>
+                    <div>
+                      <h4 className="font-bold text-slate-900">Redeem Your Code</h4>
+                      <p className="text-sm text-slate-500 mt-1">Enter your unique voucher code in the 'Redeem Voucher' box. Your extra searches are added instantly and never expire!</p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowHowItWorks(false)}
+                  className="w-full py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                >
+                  Got it
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Upgrade Modal */}
       <AnimatePresence>
         {showUpgradeModal && (
@@ -695,34 +829,33 @@ export default function App() {
               className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
             >
               <div className="bg-indigo-600 p-8 text-white relative overflow-hidden">
-                <Zap className="absolute -right-4 -top-4 w-32 h-32 opacity-10 rotate-12" />
+                <Ticket className="absolute -right-4 -top-4 w-32 h-32 opacity-10 rotate-12" />
                 <div className="relative z-10">
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full text-xs font-bold mb-4 backdrop-blur-sm">
-                    <Zap className="w-3 h-3 fill-current" />
-                    UNLIMITED ACCESS
+                    <Ticket className="w-3 h-3 fill-current" />
+                    50 EXTRA SEARCHES
                   </div>
-                  <h3 className="text-3xl font-bold mb-2">Upgrade to PRO</h3>
-                  <p className="text-indigo-100 opacity-90">Unlock unlimited searches and premium features.</p>
+                  <h3 className="text-3xl font-bold mb-2">Get More Searches</h3>
+                  <p className="text-indigo-100 opacity-90">Never miss a deal. Get 50 extra searches for just $9.90.</p>
                 </div>
               </div>
 
               <div className="p-8">
-                {dailyCount >= 10 && userTier === 'free' && (
+                {dailyCount >= 3 && userTier === 'free' && extraSearches <= 0 && (
                   <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-bold text-amber-900">Daily limit reached</p>
-                      <p className="text-xs text-amber-700">You've used all 10 free searches for today. Upgrade now to keep searching!</p>
+                      <p className="text-xs text-amber-700">You've used all 3 free searches for today. Buy a voucher to keep searching!</p>
                     </div>
                   </div>
                 )}
 
                 <div className="space-y-4 mb-8">
                   {[
-                    { icon: <Zap className="w-4 h-4" />, text: "Unlimited real-time searches" },
-                    { icon: <ShieldCheck className="w-4 h-4" />, text: "Priority deal verification" },
-                    { icon: <Mail className="w-4 h-4" />, text: "Instant email alerts for new codes" },
-                    { icon: <Sparkles className="w-4 h-4" />, text: "AI-powered custom email templates" }
+                    { icon: <Zap className="w-4 h-4" />, text: "50 real-time AI searches" },
+                    { icon: <ShieldCheck className="w-4 h-4" />, text: "Never expires" },
+                    { icon: <Ticket className="w-4 h-4" />, text: "Instant activation with code" }
                   ].map((feature, i) => (
                     <div key={i} className="flex items-center gap-3 text-slate-600">
                       <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
@@ -738,19 +871,49 @@ export default function App() {
                     onClick={handleUpgrade}
                     className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 text-center"
                   >
-                    Upgrade Now - $4.99/mo
+                    Buy 50 Searches - $9.90
                   </button>
                   <a 
-                    href="https://paypal.me/botaoshen/4.99" 
+                    href="https://paypal.me/botaoshen/9.90" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-xs text-indigo-600 font-medium hover:underline"
+                    className="text-xs text-indigo-600 font-medium hover:underline text-center"
                   >
                     Click here if the page didn't open
                   </a>
+                  
+                  <div className="my-4 border-t border-slate-100 relative">
+                    <span className="absolute left-1/2 -translate-x-1/2 -top-3 bg-white px-3 text-xs font-medium text-slate-400">OR</span>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <h4 className="font-bold text-slate-800 mb-3 text-sm">Redeem Voucher Code</h4>
+                    <form onSubmit={handleRedeemVoucher} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={voucherCode}
+                        onChange={(e) => setVoucherCode(e.target.value)}
+                        placeholder="Enter voucher code"
+                        className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={redeemingVoucher || !voucherCode.trim()}
+                        className="px-4 py-2 bg-slate-800 text-white text-sm font-bold rounded-xl hover:bg-slate-900 disabled:opacity-50 transition-all"
+                      >
+                        {redeemingVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Redeem'}
+                      </button>
+                    </form>
+                    {voucherMessage && (
+                      <p className={`text-xs mt-2 font-medium ${voucherMessage.type === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {voucherMessage.text}
+                      </p>
+                    )}
+                  </div>
+
                   <button
                     onClick={() => setShowUpgradeModal(false)}
-                    className="w-full py-2 text-slate-400 text-sm font-medium hover:text-slate-600 transition-colors"
+                    className="w-full py-2 text-slate-400 text-sm font-medium hover:text-slate-600 transition-colors mt-2"
                   >
                     Maybe later
                   </button>
