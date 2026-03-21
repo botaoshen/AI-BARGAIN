@@ -93,7 +93,7 @@ export default function App() {
     if (!query.trim() || !userId) return;
 
     // Check limit client-side first for better UX
-    if (userTier === 'free' && dailyCount >= 3 && extraSearches <= 0) {
+    if (userTier === 'free' && dailyCount >= 1 && extraSearches <= 0) {
       setShowUpgradeModal(true);
       return;
     }
@@ -126,7 +126,7 @@ export default function App() {
         const currentLocalCount = parseInt(localStorage.getItem('bargain_count') || '0');
         const currentExtra = parseInt(localStorage.getItem('bargain_extra') || '0');
         
-        if (currentLocalCount >= 3 && currentExtra > 0) {
+        if (currentLocalCount >= 1 && currentExtra > 0) {
           const newExtra = currentExtra - 1;
           setExtraSearches(newExtra);
           localStorage.setItem('bargain_extra', newExtra.toString());
@@ -277,9 +277,9 @@ export default function App() {
               {userTier === 'free' && (
                 <span className="text-slate-400 border-l border-slate-200 ml-1 pl-2">
                   {extraSearches > 0 ? (
-                    <span className="text-indigo-600 font-bold">{Math.max(0, 3 - dailyCount) + extraSearches} left</span>
+                    <span className="text-indigo-600 font-bold">{Math.max(0, 1 - dailyCount) + extraSearches} left</span>
                   ) : (
-                    <>{Math.max(0, 3 - dailyCount)} left</>
+                    <>{Math.max(0, 1 - dailyCount)} left</>
                   )}
                 </span>
               )}
@@ -780,7 +780,7 @@ export default function App() {
                     <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">1</div>
                     <div>
                       <h4 className="font-bold text-slate-900">Search for Deals</h4>
-                      <p className="text-sm text-slate-500 mt-1">Enter a store name to find active discount codes and gift card deals. You get 3 free searches every day.</p>
+                      <p className="text-sm text-slate-500 mt-1">Enter a store name to find active discount codes and gift card deals. You get 1 free search every day.</p>
                     </div>
                   </div>
                   <div className="flex gap-4">
@@ -841,12 +841,12 @@ export default function App() {
               </div>
 
               <div className="p-8">
-                {dailyCount >= 3 && userTier === 'free' && extraSearches <= 0 && (
+                {dailyCount >= 1 && userTier === 'free' && extraSearches <= 0 && (
                   <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-bold text-amber-900">Daily limit reached</p>
-                      <p className="text-xs text-amber-700">You've used all 3 free searches for today. Buy a voucher to keep searching!</p>
+                      <p className="text-xs text-amber-700">You've used your 1 free search for today. Buy a voucher to keep searching!</p>
                     </div>
                   </div>
                 )}

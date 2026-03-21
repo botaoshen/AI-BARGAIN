@@ -100,11 +100,11 @@ async function startServer() {
 
       const count = dbService.getDailySearchCount(userId);
       
-      if (user.tier === 'free' && count >= 3) {
+      if (user.tier === 'free' && count >= 1) {
         if (user.extra_searches > 0) {
           dbService.useExtraSearch(userId);
           // Don't log as a daily search if it's an extra search, or log it but we don't count it towards the daily limit.
-          // Actually, if we log it, it will increase daily count. Let's log it, but the client will see dailyCount > 3.
+          // Actually, if we log it, it will increase daily count. Let's log it, but the client will see dailyCount > 1.
           // That's fine, the client can just show "Using extra searches".
         } else {
           return res.status(403).json({ error: "Daily limit reached" });
