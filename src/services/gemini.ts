@@ -43,53 +43,72 @@ export interface GiftCardDeal {
   type: "this_week" | "next_week" | "ongoing";
 }
 
-export async function getGiftCardDeals(): Promise<GiftCardDeal[]> {
-  // In a real app, this would scrape a deal database
-  // For this demo, we use the data extracted from gcdb.com.au
-  return [
-    {
-      title: "Apple Gift Cards",
-      store: "Woolworths",
-      offer: "20x Everyday Rewards points",
-      dates: "Latest Offer",
-      type: "this_week"
-    },
-    {
-      title: "Ultimate, Webjet & Timezone",
-      store: "Woolworths",
-      offer: "20x Everyday Rewards points",
-      dates: "Latest Offer",
-      type: "this_week"
-    },
-    {
-      title: "TCN Cinema, Pamper, Pub & Bar",
-      store: "Coles",
-      offer: "2,000 Flybuys points",
-      dates: "Latest Offer",
-      type: "this_week"
-    },
-    {
-      title: "TCN Gift, Him, Her, Baby & Restaurant",
-      store: "Coles",
-      offer: "1,000 Flybuys points on $50",
-      dates: "Latest Offer",
-      type: "next_week"
-    },
-    {
-      title: "Woolworths & Big W",
-      store: "Everyday Gifting",
-      offer: "3% off + 1x EDR point per dollar",
-      dates: "Ongoing",
-      type: "ongoing"
-    },
-    {
-      title: "Woolworths, Amazon, Airbnb & Bunnings",
-      store: "Qantas Marketplace",
-      offer: "3x Qantas points",
-      dates: "Ongoing",
-      type: "ongoing"
+export interface GiftCardDealsResponse {
+  deals: GiftCardDeal[];
+  lastUpdated: string | null;
+}
+
+export async function getGiftCardDeals(): Promise<GiftCardDealsResponse> {
+  try {
+    const res = await fetch('/api/gift-cards');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.deals && data.deals.length > 0) {
+        return data;
+      }
     }
-  ];
+  } catch (error) {
+    console.error("Failed to fetch gift card deals from API, using fallback:", error);
+  }
+
+  // Fallback data if API fails or is empty
+  return {
+    deals: [
+      {
+        title: "Apple Gift Cards",
+        store: "Woolworths",
+        offer: "20x Everyday Rewards points",
+        dates: "Latest Offer",
+        type: "this_week"
+      },
+      {
+        title: "Ultimate, Webjet & Timezone",
+        store: "Woolworths",
+        offer: "20x Everyday Rewards points",
+        dates: "Latest Offer",
+        type: "this_week"
+      },
+      {
+        title: "TCN Cinema, Pamper, Pub & Bar",
+        store: "Coles",
+        offer: "2,000 Flybuys points",
+        dates: "Latest Offer",
+        type: "this_week"
+      },
+      {
+        title: "TCN Gift, Him, Her, Baby & Restaurant",
+        store: "Coles",
+        offer: "1,000 Flybuys points on $50",
+        dates: "Latest Offer",
+        type: "next_week"
+      },
+      {
+        title: "Woolworths & Big W",
+        store: "Everyday Gifting",
+        offer: "3% off + 1x EDR point per dollar",
+        dates: "Ongoing",
+        type: "ongoing"
+      },
+      {
+        title: "Woolworths, Amazon, Airbnb & Bunnings",
+        store: "Qantas Marketplace",
+        offer: "3x Qantas points",
+        dates: "Ongoing",
+        type: "ongoing"
+      }
+    ],
+    lastUpdated: new Date().toISOString()
+  };
 }
 
 export async function generateDiscountEmail(storeName: string): Promise<{subject: string, body: string}> {

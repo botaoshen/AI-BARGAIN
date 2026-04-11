@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle } from 'lucide-react';
+import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle, RefreshCw, LogIn, LogOut, User as UserIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResult, GiftCardDeal } from './services/gemini';
 import { DiscountCard } from './components/DiscountCard';
+import { supabase } from './lib/supabase';
+import { AuthModal } from './components/AuthModal';
 
 export default function App() {
   const [query, setQuery] = useState('');
@@ -19,6 +21,8 @@ export default function App() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
   const [giftCardDeals, setGiftCardDeals] = useState<GiftCardDeal[]>([]);
+  const [dealsLastUpdated, setDealsLastUpdated] = useState<string | null>(null);
+  const [syncingDeals, setSyncingDeals] = useState(false);
 
   // User & Limits State
   const [userId, setUserId] = useState<string | null>(null);
@@ -28,29 +32,46 @@ export default function App() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [voucherCode, setVoucherCode] = useState('');
   const [redeemingVoucher, setRedeemingVoucher] = useState(false);
   const [voucherMessage, setVoucherMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
+  // Auth State
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
   useEffect(() => {
-    const initUser = async () => {
+    const initUser = async (supabaseUser: any = null) => {
       let id = null;
-      try {
-        id = localStorage.getItem('bargain_user_id');
-        if (!id) {
-          id = Math.random().toString(36).substring(2, 15);
-          localStorage.setItem('bargain_user_id', id);
+      let email = null;
+      
+      if (supabaseUser) {
+        id = supabaseUser.id;
+        email = supabaseUser.email;
+      } else {
+        try {
+          id = localStorage.getItem('bargain_user_id');
+          if (!id) {
+            id = Math.random().toString(36).substring(2, 15);
+            localStorage.setItem('bargain_user_id', id);
+          }
+        } catch (e) {
+          id = 'guest-' + Math.random().toString(36).substring(2, 5);
         }
-      } catch (e) {
-        id = 'guest-' + Math.random().toString(36).substring(2, 5);
       }
+      
       setUserId(id);
+      setUserEmail(email);
 
       try {
-        const res = await fetch('/api/user/init', {
+        const endpoint = supabaseUser ? '/api/user/sync' : '/api/user/init';
+        const body = supabaseUser ? { userId: id, email } : { userId: id };
+        
+        const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: id })
+          body: JSON.stringify(body)
         });
         if (!res.ok) throw new Error("API not available");
         const data = await res.json();
@@ -61,7 +82,7 @@ export default function App() {
         }
       } catch (err) {
         console.warn("Backend API not available, falling back to local storage");
-        const localTier = (localStorage.getItem('bargain_tier') as 'free' | 'pro') || 'free';
+        const localTier = (localStorage.getItem('bargain_tier') as 'free' | 'pro' | 'admin') || 'free';
         const localCount = parseInt(localStorage.getItem('bargain_count') || '0');
         const localExtra = parseInt(localStorage.getItem('bargain_extra') || '0');
         const localDate = localStorage.getItem('bargain_date');
@@ -79,21 +100,55 @@ export default function App() {
       }
     };
 
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      initUser(session?.user);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      initUser(session?.user);
+    });
+
     const fetchGiftCards = async () => {
-      const deals = await getGiftCardDeals();
-      setGiftCardDeals(deals);
+      const response = await getGiftCardDeals();
+      setGiftCardDeals(response.deals);
+      setDealsLastUpdated(response.lastUpdated);
     };
     
-    initUser();
     fetchGiftCards();
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const handleSyncDeals = async () => {
+    setSyncingDeals(true);
+    try {
+      const res = await fetch('/api/gift-cards/sync', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.deals) {
+          setGiftCardDeals(data.deals);
+          setDealsLastUpdated(data.lastUpdated);
+        }
+      } else {
+        const err = await res.json();
+        alert(`Failed to sync: ${err.error || 'Unknown error'}`);
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(`Failed to sync: ${e.message}`);
+    } finally {
+      setSyncingDeals(false);
+    }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || !userId) return;
 
     // Check limit client-side first for better UX
-    if (userTier === 'free' && dailyCount >= 1 && extraSearches <= 0) {
+    if (userTier !== 'admin' && userTier === 'free' && dailyCount >= 1 && extraSearches <= 0) {
       setShowUpgradeModal(true);
       return;
     }
@@ -198,9 +253,36 @@ export default function App() {
     }
   };
 
-  const handleUpgrade = () => {
-    const paymentLink = "https://paypal.me/botaoshen/9.90";
-    window.open(paymentLink, '_blank');
+  const handleUpgrade = async () => {
+    if (!userId) {
+      setShowAuthModal(true);
+      return;
+    }
+    setUpgrading(true);
+    setUpgradeError(null);
+    try {
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, email: userEmail })
+      });
+      const data = await res.json();
+      if (data.url) {
+        const newWindow = window.open(data.url, '_blank');
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+          setUpgradeError("Popup blocked. Please allow popups or open this app in a new tab.");
+        } else {
+          setShowUpgradeModal(false);
+        }
+      } else {
+        setUpgradeError(data.error || "Failed to start checkout");
+      }
+    } catch (err) {
+      console.error(err);
+      setUpgradeError("Failed to connect to payment provider.");
+    } finally {
+      setUpgrading(false);
+    }
   };
 
   const handleSubscribe = async (e: React.FormEvent) => {
@@ -253,10 +335,15 @@ export default function App() {
 
   const popularStores = ['The Iconic', 'ASOS', 'Nike', 'Amazon', 'Uber Eats'];
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-slate-50 font-sans selection:bg-emerald-200">
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
@@ -266,13 +353,13 @@ export default function App() {
           </div>
           <div className="flex items-center gap-3 sm:gap-6 text-sm font-medium text-slate-500">
             <div className={`flex items-center gap-2 px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs transition-all ${
-              userTier === 'pro' 
+              userTier === 'pro' || userTier === 'admin'
                 ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' 
                 : 'bg-slate-100 text-slate-600'
             }`}>
-              {userTier === 'pro' && <Zap className="w-3 h-3 fill-current" />}
+              {(userTier === 'pro' || userTier === 'admin') && <Zap className="w-3 h-3 fill-current" />}
               <span className="font-bold">
-                {userTier === 'pro' ? 'PRO' : 'Free'}
+                {userTier === 'admin' ? 'ADMIN' : (userTier === 'pro' ? 'PRO' : 'Free')}
               </span>
               {userTier === 'free' && (
                 <span className="text-slate-400 border-l border-slate-200 ml-1 pl-2">
@@ -284,33 +371,37 @@ export default function App() {
                 </span>
               )}
             </div>
+            
+            {userEmail ? (
+              <div className="hidden sm:flex items-center gap-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                  <UserIcon className="w-4 h-4" />
+                  {userEmail}
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1"
+              >
+                <LogIn className="w-4 h-4" />
+                Sign In / Sign Up
+              </button>
+            )}
+
             <button 
               onClick={() => setShowHowItWorks(true)} 
               className="hidden md:inline hover:text-indigo-600 transition-colors font-medium"
             >
               How it works
             </button>
-            {userTier === 'pro' && (
-              <button 
-                onClick={async () => {
-                  if (!userId) return;
-                  try {
-                    await fetch('/api/user/reset', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ userId })
-                    });
-                  } catch (e) {}
-                  setUserTier('free');
-                  setDailyCount(0);
-                  localStorage.setItem('bargain_tier', 'free');
-                  localStorage.setItem('bargain_count', '0');
-                }}
-                className="text-xs text-slate-400 hover:text-red-500 transition-colors underline"
-              >
-                Reset (Test)
-              </button>
-            )}
             {userTier === 'free' && (
               <button 
                 onClick={() => setShowUpgradeModal(true)}
@@ -394,7 +485,7 @@ export default function App() {
 
             {/* Gift Card Discounts Section */}
             <div className="mt-12 text-left">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
                 <div className="flex items-center gap-2">
                   <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
                     <Ticket className="w-5 h-5 text-emerald-600" />
@@ -404,69 +495,66 @@ export default function App() {
                     <p className="text-sm text-slate-500">Curated weekly deals for you</p>
                   </div>
                 </div>
+                {dealsLastUpdated && (
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      Updated: {new Date(dealsLastUpdated + 'Z').toLocaleString()}
+                    </div>
+                    {userTier === 'admin' && (
+                      <button 
+                        type="button"
+                        onClick={handleSyncDeals}
+                        disabled={syncingDeals}
+                        className="text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {syncingDeals ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                        Sync Now
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {giftCardDeals.map((deal, idx) => (
-                  <motion.div
-                    key={idx}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.05 }}
-                    className="bg-white border border-slate-200 rounded-2xl p-4 hover:shadow-md transition-shadow group"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md uppercase tracking-wider">
-                        {deal.store}
-                      </span>
-                      <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider ${
-                        deal.type === 'next_week' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {deal.type === 'next_week' ? 'Next Week' : 'This Week'}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{deal.title}</h3>
-                    <p className="text-sm text-slate-600 mt-1 font-medium">{deal.offer}</p>
-                    <div className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
-                      <Clock className="w-3 h-3" />
-                      <span>{deal.dates}</span>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
+                {giftCardDeals.map((deal, idx) => {
+                  const CardContent = (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="bg-white border border-slate-200 rounded-2xl p-4 hover:shadow-md transition-shadow group h-full"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md uppercase tracking-wider">
+                          {deal.store}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider ${
+                          deal.type === 'next_week' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {deal.type === 'next_week' ? 'Next Week' : 'This Week'}
+                        </span>
+                      </div>
+                      <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{deal.title}</h3>
+                      <p className="text-sm text-slate-600 mt-1 font-medium">{deal.offer}</p>
+                      <div className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
+                        <Clock className="w-3 h-3" />
+                        <span>{deal.dates}</span>
+                      </div>
+                    </motion.div>
+                  );
 
-            {/* Live Sale Alerts Section */}
-            <div className="mt-16 text-left">
-              <div className="flex items-center gap-2 mb-6">
-                <div className="w-1.5 h-6 bg-orange-500 rounded-full" />
-                <h2 className="text-xl font-bold text-slate-900">Live Sale Alerts</h2>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  { store: "L'Oréal", event: "Family & Friends Sale", timing: "Expected March", status: "Rumored" },
-                  { store: "Estée Lauder", event: "Warehouse Sale", timing: "Annual Event", status: "Coming Soon" },
-                  { store: "Nike", event: "End of Season Clearance", timing: "Live Now", status: "Verified" }
-                ].map((sale, idx) => (
-                  <div 
-                    key={idx}
-                    onClick={() => { setQuery(sale.store); }}
-                    className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer group"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100">
-                        {sale.status}
-                      </span>
-                      <CalendarDays className="w-4 h-4 text-slate-300 group-hover:text-orange-500 transition-colors" />
+                  return deal.link ? (
+                    <a href={deal.link} target="_blank" rel="noopener noreferrer" key={idx} className="block h-full">
+                      {CardContent}
+                    </a>
+                  ) : (
+                    <div key={idx} className="block h-full">
+                      {CardContent}
                     </div>
-                    <h3 className="font-bold text-slate-900 text-lg">{sale.store}</h3>
-                    <p className="text-slate-500 text-sm mt-1">{sale.event}</p>
-                    <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-400">
-                      <Clock className="w-3 h-3" />
-                      <span>{sale.timing}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </motion.form>
@@ -829,14 +917,14 @@ export default function App() {
               className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
             >
               <div className="bg-indigo-600 p-8 text-white relative overflow-hidden">
-                <Ticket className="absolute -right-4 -top-4 w-32 h-32 opacity-10 rotate-12" />
+                <Sparkles className="absolute -right-4 -top-4 w-32 h-32 opacity-10 rotate-12" />
                 <div className="relative z-10">
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full text-xs font-bold mb-4 backdrop-blur-sm">
-                    <Ticket className="w-3 h-3 fill-current" />
-                    50 EXTRA SEARCHES
+                    <Sparkles className="w-3 h-3 fill-current" />
+                    PRO MEMBERSHIP
                   </div>
-                  <h3 className="text-3xl font-bold mb-2">Get More Searches</h3>
-                  <p className="text-indigo-100 opacity-90">Never miss a deal. Get 50 extra searches for just $9.90.</p>
+                  <h3 className="text-3xl font-bold mb-2">Unlock Pro Features</h3>
+                  <p className="text-indigo-100 opacity-90">Get 100 AI searches every month. Try it free for 7 days.</p>
                 </div>
               </div>
 
@@ -846,16 +934,16 @@ export default function App() {
                     <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-bold text-amber-900">Daily limit reached</p>
-                      <p className="text-xs text-amber-700">You've used your 1 free search for today. Buy a voucher to keep searching!</p>
+                      <p className="text-xs text-amber-700">You've used your 1 free search for today. Upgrade to keep searching!</p>
                     </div>
                   </div>
                 )}
 
                 <div className="space-y-4 mb-8">
                   {[
-                    { icon: <Zap className="w-4 h-4" />, text: "50 real-time AI searches" },
-                    { icon: <ShieldCheck className="w-4 h-4" />, text: "Never expires" },
-                    { icon: <Ticket className="w-4 h-4" />, text: "Instant activation with code" }
+                    { icon: <Zap className="w-4 h-4" />, text: "100 real-time AI searches per month" },
+                    { icon: <Clock className="w-4 h-4" />, text: "7-day free trial" },
+                    { icon: <ShieldCheck className="w-4 h-4" />, text: "Cancel anytime" }
                   ].map((feature, i) => (
                     <div key={i} className="flex items-center gap-3 text-slate-600">
                       <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
@@ -867,50 +955,23 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-col gap-3">
+                  {upgradeError && (
+                    <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>{upgradeError}</span>
+                    </div>
+                  )}
                   <button
                     onClick={handleUpgrade}
-                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 text-center"
+                    disabled={upgrading}
+                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 text-center"
                   >
-                    Buy 50 Searches - $9.90
+                    {upgrading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Start 7-Day Free Trial"}
                   </button>
-                  <a 
-                    href="https://paypal.me/botaoshen/9.90" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-xs text-indigo-600 font-medium hover:underline text-center"
-                  >
-                    Click here if the page didn't open
-                  </a>
+                  <p className="text-xs text-slate-400 text-center mt-2">
+                    $10.00/month after trial. Auto-renews.
+                  </p>
                   
-                  <div className="my-4 border-t border-slate-100 relative">
-                    <span className="absolute left-1/2 -translate-x-1/2 -top-3 bg-white px-3 text-xs font-medium text-slate-400">OR</span>
-                  </div>
-
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <h4 className="font-bold text-slate-800 mb-3 text-sm">Redeem Voucher Code</h4>
-                    <form onSubmit={handleRedeemVoucher} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={voucherCode}
-                        onChange={(e) => setVoucherCode(e.target.value)}
-                        placeholder="Enter voucher code"
-                        className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                      />
-                      <button
-                        type="submit"
-                        disabled={redeemingVoucher || !voucherCode.trim()}
-                        className="px-4 py-2 bg-slate-800 text-white text-sm font-bold rounded-xl hover:bg-slate-900 disabled:opacity-50 transition-all"
-                      >
-                        {redeemingVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Redeem'}
-                      </button>
-                    </form>
-                    {voucherMessage && (
-                      <p className={`text-xs mt-2 font-medium ${voucherMessage.type === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {voucherMessage.text}
-                      </p>
-                    )}
-                  </div>
-
                   <button
                     onClick={() => setShowUpgradeModal(false)}
                     className="w-full py-2 text-slate-400 text-sm font-medium hover:text-slate-600 transition-colors mt-2"

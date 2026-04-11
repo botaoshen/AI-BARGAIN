@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+bargains.db
+*.sqlite
+*.sqlite3

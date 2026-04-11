@@ -33,6 +33,18 @@ try {
   // Column might already exist, ignore
 }
 
+try {
+  db.exec(`ALTER TABLE gift_card_deals ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP`);
+} catch (e) {
+  // Column might already exist, ignore
+}
+
+try {
+  db.exec(`ALTER TABLE gift_card_deals ADD COLUMN link TEXT`);
+} catch (e) {
+  // Column might already exist, ignore
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS vouchers (
     code TEXT PRIMARY KEY,
@@ -51,6 +63,17 @@ db.exec(`
   )
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gift_card_deals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    store TEXT NOT NULL,
+    offer TEXT NOT NULL,
+    dates TEXT NOT NULL,
+    type TEXT NOT NULL
+  )
+`);
+
 export interface Subscription {
   id: number;
   email: string;
@@ -61,8 +84,17 @@ export interface Subscription {
 export interface User {
   id: string;
   email: string | null;
-  tier: 'free' | 'pro';
+  tier: 'free' | 'pro' | 'admin';
   extra_searches: number;
+}
+
+export interface GiftCardDeal {
+  title: string;
+  store: string;
+  offer: string;
+  dates: string;
+  type: "this_week" | "next_week" | "ongoing";
+  link?: string;
 }
 
 export const dbService = {
@@ -71,9 +103,14 @@ export const dbService = {
     return stmt.get(userId) as User | null;
   },
 
-  createUser: (userId: string, tier: string = 'free') => {
-    const stmt = db.prepare('INSERT OR IGNORE INTO users (id, tier) VALUES (?, ?)');
-    return stmt.run(userId, tier);
+  createUser: (userId: string, tier: string = 'free', email: string | null = null) => {
+    const stmt = db.prepare('INSERT OR IGNORE INTO users (id, tier, email) VALUES (?, ?, ?)');
+    return stmt.run(userId, tier, email);
+  },
+
+  updateUserEmailAndTier: (userId: string, email: string, tier: string) => {
+    const stmt = db.prepare('UPDATE users SET email = ?, tier = ? WHERE id = ?');
+    return stmt.run(email, tier, userId);
   },
 
   upgradeUser: (userId: string) => {
@@ -148,5 +185,34 @@ export const dbService = {
   getAllSubscriptions: (): Subscription[] => {
     const stmt = db.prepare('SELECT * FROM subscriptions');
     return stmt.all() as Subscription[];
+  },
+
+  getGiftCardDeals: (): { deals: GiftCardDeal[], lastUpdated: string | null } => {
+    const stmt = db.prepare('SELECT title, store, offer, dates, type, link, updated_at FROM gift_card_deals LIMIT 6');
+    const rows = stmt.all() as any[];
+    const deals = rows.map(row => ({
+      title: row.title,
+      store: row.store,
+      offer: row.offer,
+      dates: row.dates,
+      type: row.type,
+      link: row.link
+    }));
+    const lastUpdated = rows.length > 0 ? rows[0].updated_at : null;
+    return { deals, lastUpdated };
+  },
+
+  updateGiftCardDeals: (deals: GiftCardDeal[]) => {
+    const deleteStmt = db.prepare('DELETE FROM gift_card_deals');
+    const insertStmt = db.prepare('INSERT INTO gift_card_deals (title, store, offer, dates, type, link, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)');
+    
+    const transaction = db.transaction((newDeals: GiftCardDeal[]) => {
+      deleteStmt.run();
+      for (const deal of newDeals) {
+        insertStmt.run(deal.title, deal.store, deal.offer, deal.dates, deal.type, deal.link || null);
+      }
+    });
+    
+    transaction(deals);
   }
 };
