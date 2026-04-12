@@ -3,8 +3,7 @@ import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2
 import { motion, AnimatePresence } from 'motion/react';
 import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResult, GiftCardDeal } from './services/gemini';
 import { DiscountCard } from './components/DiscountCard';
-import { auth } from './lib/firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { supabase } from './lib/supabase';
 import { AuthModal } from './components/AuthModal';
 
 export default function App() {
@@ -43,13 +42,13 @@ export default function App() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    const initUser = async (firebaseUser: any = null) => {
+    const initUser = async (supabaseUser: any = null) => {
       let id = null;
       let email = null;
       
-      if (firebaseUser) {
-        id = firebaseUser.uid;
-        email = firebaseUser.email;
+      if (supabaseUser) {
+        id = supabaseUser.id;
+        email = supabaseUser.email;
       } else {
         try {
           id = localStorage.getItem('bargain_user_id');
@@ -66,8 +65,8 @@ export default function App() {
       setUserEmail(email);
 
       try {
-        const endpoint = firebaseUser ? '/api/user/sync' : '/api/user/init';
-        const body = firebaseUser ? { userId: id, email } : { userId: id };
+        const endpoint = supabaseUser ? '/api/user/sync' : '/api/user/init';
+        const body = supabaseUser ? { userId: id, email } : { userId: id };
         
         const res = await fetch(endpoint, {
           method: 'POST',
@@ -101,9 +100,14 @@ export default function App() {
       }
     };
 
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      initUser(session?.user);
+    });
+
     // Listen for auth changes
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      initUser(user);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      initUser(session?.user);
     });
 
     const fetchGiftCards = async () => {
@@ -114,7 +118,7 @@ export default function App() {
     
     fetchGiftCards();
 
-    return () => unsubscribe();
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSyncDeals = async () => {
@@ -332,7 +336,7 @@ export default function App() {
   const popularStores = ['The Iconic', 'ASOS', 'Nike', 'Amazon', 'Uber Eats'];
 
   const handleSignOut = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
   };
 
   return (
