@@ -42,6 +42,15 @@ export default function App() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check for successful upgrade redirect
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('upgrade') === 'success') {
+      localStorage.setItem('bargain_tier', 'pro');
+      setUserTier('pro');
+      // Clean up URL without reloading
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     const initUser = async (supabaseUser: any = null) => {
       let id = null;
       let email = null;
