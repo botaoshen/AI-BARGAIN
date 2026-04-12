@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User's email address"
+        },
+        "tier": {
+          "type": "string",
+          "enum": ["free", "pro", "admin"],
+          "description": "User's subscription tier"
+        },
+        "extra_searches": {
+          "type": "number",
+          "description": "Number of extra searches available"
+        },
+        "stripe_customer_id": {
+          "type": "string",
+          "description": "Stripe customer ID"
+        },
+        "stripe_subscription_id": {
+          "type": "string",
+          "description": "Stripe subscription ID"
+        },
+        "search_credits": {
+          "type": "number",
+          "description": "Monthly search credits"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user was created"
+        }
+      },
+      "required": ["tier", "extra_searches"]
+    },
+    "SearchLog": {
+      "title": "SearchLog",
+      "description": "A log of a user's search",
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "description": "The ID of the user who searched"
+        },
+        "search_date": {
+          "type": "string",
+          "description": "The date of the search (YYYY-MM-DD)"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["user_id", "search_date", "created_at"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "User profiles"
+    },
+    "/search_logs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/SearchLog"
+      },
+      "description": "Search logs for rate limiting"
+    }
+  }
+}

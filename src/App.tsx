@@ -3,7 +3,8 @@ import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2
 import { motion, AnimatePresence } from 'motion/react';
 import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResult, GiftCardDeal } from './services/gemini';
 import { DiscountCard } from './components/DiscountCard';
-import { supabase } from './lib/supabase';
+import { auth } from './lib/firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { AuthModal } from './components/AuthModal';
 
 export default function App() {
@@ -26,7 +27,7 @@ export default function App() {
 
   // User & Limits State
   const [userId, setUserId] = useState<string | null>(null);
-  const [userTier, setUserTier] = useState<'free' | 'pro'>('free');
+  const [userTier, setUserTier] = useState<'free' | 'pro' | 'admin'>('free');
   const [dailyCount, setDailyCount] = useState(0);
   const [extraSearches, setExtraSearches] = useState(0);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -42,13 +43,13 @@ export default function App() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    const initUser = async (supabaseUser: any = null) => {
+    const initUser = async (firebaseUser: any = null) => {
       let id = null;
       let email = null;
       
-      if (supabaseUser) {
-        id = supabaseUser.id;
-        email = supabaseUser.email;
+      if (firebaseUser) {
+        id = firebaseUser.uid;
+        email = firebaseUser.email;
       } else {
         try {
           id = localStorage.getItem('bargain_user_id');
@@ -65,8 +66,8 @@ export default function App() {
       setUserEmail(email);
 
       try {
-        const endpoint = supabaseUser ? '/api/user/sync' : '/api/user/init';
-        const body = supabaseUser ? { userId: id, email } : { userId: id };
+        const endpoint = firebaseUser ? '/api/user/sync' : '/api/user/init';
+        const body = firebaseUser ? { userId: id, email } : { userId: id };
         
         const res = await fetch(endpoint, {
           method: 'POST',
@@ -100,14 +101,9 @@ export default function App() {
       }
     };
 
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      initUser(session?.user);
-    });
-
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      initUser(session?.user);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      initUser(user);
     });
 
     const fetchGiftCards = async () => {
@@ -118,7 +114,7 @@ export default function App() {
     
     fetchGiftCards();
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const handleSyncDeals = async () => {
@@ -336,7 +332,7 @@ export default function App() {
   const popularStores = ['The Iconic', 'ASOS', 'Nike', 'Amazon', 'Uber Eats'];
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOut(auth);
   };
 
   return (

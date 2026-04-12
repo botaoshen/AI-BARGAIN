@@ -41,6 +41,7 @@ export interface GiftCardDeal {
   offer: string;
   dates: string;
   type: "this_week" | "next_week" | "ongoing";
+  link?: string;
 }
 
 export interface GiftCardDealsResponse {

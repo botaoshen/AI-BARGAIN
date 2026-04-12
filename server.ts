@@ -13,7 +13,7 @@ function getStripe() {
   if (!stripeClient) {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) throw new Error("STRIPE_SECRET_KEY is missing");
-    stripeClient = new Stripe(key, { apiVersion: "2025-02-24.acacia" });
+    stripeClient = new Stripe(key, { apiVersion: "2026-03-25.dahlia" as any });
   }
   return stripeClient;
 }
@@ -73,7 +73,7 @@ async function startServer() {
           break;
         }
         case "invoice.payment_succeeded": {
-          const invoice = event.data.object as Stripe.Invoice;
+          const invoice = event.data.object as any;
           const subscriptionId = invoice.subscription as string;
           
           if (invoice.billing_reason === 'subscription_cycle') {
