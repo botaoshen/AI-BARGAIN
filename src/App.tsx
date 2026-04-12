@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle, RefreshCw, LogIn, LogOut, User as UserIcon } from 'lucide-react';
+import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle, RefreshCw, LogIn, LogOut, User as UserIcon, Heart, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResult, GiftCardDeal } from './services/gemini';
 import { DiscountCard } from './components/DiscountCard';
@@ -41,15 +41,47 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  // Hub State
+  const [currentView, setCurrentView] = useState<'search' | 'hub'>('search');
+  const [savedDeals, setSavedDeals] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (userId) {
+      const saved = localStorage.getItem(`saved_deals_${userId}`);
+      if (saved) {
+        try {
+          setSavedDeals(JSON.parse(saved));
+        } catch (e) {
+          console.error("Failed to parse saved deals", e);
+        }
+      }
+    }
+  }, [userId]);
+
   useEffect(() => {
     // Check for successful upgrade redirect
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('upgrade') === 'success') {
-      localStorage.setItem('bargain_tier', 'pro');
-      setUserTier('pro');
-      // Clean up URL without reloading
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
+    const upgradeStatus = urlParams.get('upgrade');
+    const sessionId = urlParams.get('session_id');
+
+    const verifyCheckout = async () => {
+      if (upgradeStatus === 'success' && sessionId) {
+        try {
+          await fetch('/api/verify-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId })
+          });
+          localStorage.setItem('bargain_tier', 'pro');
+          setUserTier('pro');
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (e) {
+          console.error("Failed to verify checkout", e);
+        }
+      }
+    };
+
+    verifyCheckout();
 
     const initUser = async (supabaseUser: any = null) => {
       let id = null;
@@ -280,12 +312,7 @@ export default function App() {
       });
       const data = await res.json();
       if (data.url) {
-        const newWindow = window.open(data.url, '_blank');
-        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-          setUpgradeError("Popup blocked. Please allow popups or open this app in a new tab.");
-        } else {
-          setShowUpgradeModal(false);
-        }
+        window.location.href = data.url;
       } else {
         setUpgradeError(data.error || "Failed to start checkout");
       }
@@ -347,6 +374,24 @@ export default function App() {
 
   const popularStores = ['The Iconic', 'ASOS', 'Nike', 'Amazon', 'Uber Eats'];
 
+  const toggleSaveDeal = (deal: any, storeName: string) => {
+    if (!userId || userId.startsWith('guest-')) {
+      setShowAuthModal(true);
+      return;
+    }
+    setSavedDeals(prev => {
+      const isSaved = prev.some(d => d.storeName === storeName && d.deal.description === deal.description);
+      let next;
+      if (isSaved) {
+        next = prev.filter(d => !(d.storeName === storeName && d.deal.description === deal.description));
+      } else {
+        next = [...prev, { storeName, deal }];
+      }
+      localStorage.setItem(`saved_deals_${userId}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
@@ -391,6 +436,14 @@ export default function App() {
             
             {userEmail ? (
               <div className="hidden sm:flex items-center gap-4">
+                <button
+                  onClick={() => setCurrentView(currentView === 'hub' ? 'search' : 'hub')}
+                  className={`text-sm font-medium transition-colors flex items-center gap-1.5 ${currentView === 'hub' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-900'}`}
+                >
+                  <Heart className="w-4 h-4" />
+                  <span>My Hub</span>
+                </button>
+                <div className="w-px h-4 bg-slate-200"></div>
                 <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
                   <UserIcon className="w-4 h-4" />
                   {userEmail}
@@ -432,7 +485,83 @@ export default function App() {
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto px-4 py-12 w-full">
-        {/* Hero Section */}
+        {currentView === 'hub' ? (
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold text-slate-900">My Hub</h2>
+              <button onClick={() => setCurrentView('search')} className="text-indigo-600 font-medium hover:text-indigo-700 flex items-center gap-2">
+                <ArrowLeft className="w-4 h-4" /> Back to Search
+              </button>
+            </div>
+            
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="md:col-span-1 space-y-6">
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <UserIcon className="w-5 h-5 text-indigo-600" /> Account Status
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm text-slate-500">Email</p>
+                      <p className="font-medium text-slate-900">{userEmail || 'Guest'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500">Plan</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${userTier === 'pro' || userTier === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'}`}>
+                          {userTier}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500">Searches Remaining</p>
+                      <p className="font-bold text-2xl text-indigo-600">
+                        {userTier === 'pro' || userTier === 'admin' ? extraSearches : Math.max(0, 1 - dailyCount) + extraSearches}
+                      </p>
+                    </div>
+                    {userTier === 'free' && (
+                      <button onClick={() => setShowUpgradeModal(true)} className="w-full py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors text-sm">
+                        Upgrade to PRO
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="md:col-span-2">
+                <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                  <Heart className="w-5 h-5 text-rose-500" /> Saved Bargains
+                </h3>
+                {savedDeals.length === 0 ? (
+                  <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center">
+                    <Heart className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500 font-medium">You haven't saved any bargains yet.</p>
+                    <button onClick={() => setCurrentView('search')} className="mt-4 text-indigo-600 font-bold hover:text-indigo-700">
+                      Go find some deals
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {savedDeals.map((saved, idx) => (
+                      <div key={idx} className="relative">
+                        <div className="absolute -top-3 -left-3 bg-slate-900 text-white text-[10px] font-bold px-3 py-1 rounded-full z-10 shadow-sm">
+                          {saved.storeName}
+                        </div>
+                        <DiscountCard 
+                          discount={saved.deal} 
+                          onSave={() => toggleSaveDeal(saved.deal, saved.storeName)} 
+                          isSaved={true} 
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Hero Section */}
         <div className="text-center mb-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -655,7 +784,11 @@ export default function App() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <DiscountCard discount={discount} />
+                      <DiscountCard 
+                        discount={discount} 
+                        onSave={() => toggleSaveDeal(discount, result.storeName)}
+                        isSaved={savedDeals.some(d => d.storeName === result.storeName && d.deal.description === discount.description)}
+                      />
                     </motion.div>
                   ))}
                 </div>
@@ -693,6 +826,8 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+        </>
+        )}
       </main>
 
       {/* Footer */}

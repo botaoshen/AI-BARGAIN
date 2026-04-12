@@ -43,7 +43,7 @@ export default async function handler(req: any, res: any) {
       subscription_data: {
         trial_period_days: 30,
       },
-      success_url: `${domain}?upgrade=success`,
+      success_url: `${domain}?upgrade=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${domain}?upgrade=cancelled`,
     });
 

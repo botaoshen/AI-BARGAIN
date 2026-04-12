@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, ExternalLink, CheckCircle2, Clock, AlertCircle, Gift, CreditCard, Percent, ShieldCheck, Zap, CalendarDays } from 'lucide-react';
+import { Copy, ExternalLink, CheckCircle2, Clock, AlertCircle, Gift, CreditCard, Percent, ShieldCheck, Zap, CalendarDays, Heart } from 'lucide-react';
 import { DiscountCode } from '../services/gemini';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -10,9 +10,11 @@ function cn(...inputs: ClassValue[]) {
 
 interface DiscountCardProps {
   discount: DiscountCode;
+  onSave?: () => void;
+  isSaved?: boolean;
 }
 
-export const DiscountCard: React.FC<DiscountCardProps> = ({ discount }) => {
+export const DiscountCard: React.FC<DiscountCardProps> = ({ discount, onSave, isSaved }) => {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = () => {
@@ -62,15 +64,26 @@ export const DiscountCard: React.FC<DiscountCardProps> = ({ discount }) => {
             {discount.description}
           </h3>
         </div>
-        {discount.type === 'code' && discount.code !== 'N/A' && (
-          <button 
-            onClick={copyToClipboard}
-            className="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-400 hover:text-indigo-600"
-            title="Copy code"
-          >
-            {copied ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {onSave && (
+            <button 
+              onClick={onSave}
+              className="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-400 hover:text-rose-500"
+              title={isSaved ? "Remove from saved" : "Save deal"}
+            >
+              <Heart className={cn("w-5 h-5", isSaved && "fill-rose-500 text-rose-500")} />
+            </button>
+          )}
+          {discount.type === 'code' && discount.code !== 'N/A' && (
+            <button 
+              onClick={copyToClipboard}
+              className="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-400 hover:text-indigo-600"
+              title="Copy code"
+            >
+              {copied ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-3 mb-4 mt-auto">
