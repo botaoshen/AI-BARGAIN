@@ -942,14 +942,21 @@ export default function App() {
                 <div className="space-y-4 mb-8">
                   {[
                     { icon: <Zap className="w-4 h-4" />, text: "100 real-time AI searches per month" },
-                    { icon: <Clock className="w-4 h-4" />, text: "7-day free trial" },
+                    { icon: <Clock className="w-4 h-4" />, text: "1-month free trial", badge: "Limited time" },
                     { icon: <ShieldCheck className="w-4 h-4" />, text: "Cancel anytime" }
                   ].map((feature, i) => (
                     <div key={i} className="flex items-center gap-3 text-slate-600">
                       <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
                         {feature.icon}
                       </div>
-                      <span className="text-sm font-medium">{feature.text}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{feature.text}</span>
+                        {feature.badge && (
+                          <span className="px-2 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold rounded-full uppercase tracking-wider">
+                            {feature.badge}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -964,9 +971,10 @@ export default function App() {
                   <button
                     onClick={handleUpgrade}
                     disabled={upgrading}
-                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 text-center"
+                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 text-center relative overflow-hidden"
                   >
-                    {upgrading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Start 7-Day Free Trial"}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
+                    {upgrading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Start 1-Month Free Trial"}
                   </button>
                   <p className="text-xs text-slate-400 text-center mt-2">
                     $10.00/month after trial. Auto-renews.
