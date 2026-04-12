@@ -382,6 +382,11 @@ export default function App() {
                   )}
                 </span>
               )}
+              {userTier === 'pro' && (
+                <span className="text-indigo-200 border-l border-indigo-500 ml-1 pl-2">
+                  <span className="text-white font-bold">{extraSearches} left</span>
+                </span>
+              )}
             </div>
             
             {userEmail ? (
