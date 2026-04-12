@@ -59,30 +59,6 @@ export default function App() {
   }, [userId]);
 
   useEffect(() => {
-    // Check for successful upgrade redirect
-    const urlParams = new URLSearchParams(window.location.search);
-    const upgradeStatus = urlParams.get('upgrade');
-    const sessionId = urlParams.get('session_id');
-
-    const verifyCheckout = async () => {
-      if (upgradeStatus === 'success' && sessionId) {
-        try {
-          await fetch('/api/verify-checkout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId })
-          });
-          localStorage.setItem('bargain_tier', 'pro');
-          setUserTier('pro');
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } catch (e) {
-          console.error("Failed to verify checkout", e);
-        }
-      }
-    };
-
-    verifyCheckout();
-
     const initUser = async (supabaseUser: any = null) => {
       let id = null;
       let email = null;
@@ -144,10 +120,32 @@ export default function App() {
       }
     };
 
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      initUser(session?.user);
-    });
+    const checkAuthAndInit = async () => {
+      // Check for successful upgrade redirect
+      const urlParams = new URLSearchParams(window.location.search);
+      const upgradeStatus = urlParams.get('upgrade');
+      const sessionId = urlParams.get('session_id');
+
+      if (upgradeStatus === 'success' && sessionId) {
+        try {
+          await fetch('/api/verify-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId })
+          });
+          localStorage.setItem('bargain_tier', 'pro');
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (e) {
+          console.error("Failed to verify checkout", e);
+        }
+      }
+
+      // Check active session
+      const { data: { session } } = await supabase.auth.getSession();
+      await initUser(session?.user);
+    };
+
+    checkAuthAndInit();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
