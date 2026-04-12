@@ -280,9 +280,9 @@ export default function App() {
       } else {
         setUpgradeError(data.error || "Failed to start checkout");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setUpgradeError("Failed to connect to payment provider.");
+      setUpgradeError(err.message || "Failed to connect to payment provider.");
     } finally {
       setUpgrading(false);
     }
