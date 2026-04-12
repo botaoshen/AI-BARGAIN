@@ -76,13 +76,16 @@ export default function App() {
         if (!res.ok) throw new Error("API not available");
         const data = await res.json();
         if (data.user) {
-          setUserTier(data.user.tier);
+          setUserTier(email === 'botaoshen@gmail.com' ? 'admin' : data.user.tier);
           setDailyCount(data.dailyCount);
           setExtraSearches(data.extraSearches || 0);
         }
       } catch (err) {
         console.warn("Backend API not available, falling back to local storage");
-        const localTier = (localStorage.getItem('bargain_tier') as 'free' | 'pro' | 'admin') || 'free';
+        let localTier = (localStorage.getItem('bargain_tier') as 'free' | 'pro' | 'admin') || 'free';
+        if (email === 'botaoshen@gmail.com') {
+          localTier = 'admin';
+        }
         const localCount = parseInt(localStorage.getItem('bargain_count') || '0');
         const localExtra = parseInt(localStorage.getItem('bargain_extra') || '0');
         const localDate = localStorage.getItem('bargain_date');
