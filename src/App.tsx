@@ -927,7 +927,9 @@ export default function App() {
                     PRO MEMBERSHIP
                   </div>
                   <h3 className="text-3xl font-bold mb-2">Unlock Pro Features</h3>
-                  <p className="text-indigo-100 opacity-90">Get 100 AI searches every month. Try it free for 7 days.</p>
+                  <p className="text-indigo-100 opacity-90">
+                    Get 100 AI searches every month. Try it free for <span className="line-through opacity-70">7</span> <span className="font-bold text-white">30</span> days.
+                  </p>
                 </div>
               </div>
 
@@ -945,8 +947,10 @@ export default function App() {
                 <div className="space-y-4 mb-8">
                   {[
                     { icon: <Zap className="w-4 h-4" />, text: "100 real-time AI searches per month" },
-                    { icon: <Clock className="w-4 h-4" />, text: "1-month free trial", badge: "Limited time" },
-                    { icon: <ShieldCheck className="w-4 h-4" />, text: "Cancel anytime" }
+                    { icon: <Clock className="w-4 h-4" />, text: "30-day free trial", badge: "Limited time" },
+                    { icon: <Ticket className="w-4 h-4" />, text: "Pro membership exclusive discount codes (Coming soon)" },
+                    { icon: <ShieldCheck className="w-4 h-4" />, text: "Paid membership access (UNiDAYS, Student Beans, Entertainment Group)" },
+                    { icon: <CreditCard className="w-4 h-4" />, text: "Cancel anytime" }
                   ].map((feature, i) => (
                     <div key={i} className="flex items-center gap-3 text-slate-600">
                       <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
