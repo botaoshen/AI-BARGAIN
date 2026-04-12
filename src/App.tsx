@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle, RefreshCw, LogIn, LogOut, User as UserIcon, Heart, ArrowLeft } from 'lucide-react';
+import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle, RefreshCw, LogIn, LogOut, User as UserIcon, Heart, ArrowLeft, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResult, GiftCardDeal } from './services/gemini';
 import { DiscountCard } from './components/DiscountCard';
@@ -32,6 +32,7 @@ export default function App() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [managingSub, setManagingSub] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [voucherCode, setVoucherCode] = useState('');
   const [redeemingVoucher, setRedeemingVoucher] = useState(false);
@@ -295,6 +296,29 @@ export default function App() {
     }
   };
 
+  const handleManageSubscription = async () => {
+    if (!userId) return;
+    setManagingSub(true);
+    try {
+      const res = await fetch('/api/create-portal-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "Failed to open subscription portal");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to connect to billing portal");
+    } finally {
+      setManagingSub(false);
+    }
+  };
+
   const handleUpgrade = async () => {
     if (!userId) {
       setShowAuthModal(true);
@@ -520,6 +544,16 @@ export default function App() {
                     {userTier === 'free' && (
                       <button onClick={() => setShowUpgradeModal(true)} className="w-full py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors text-sm">
                         Upgrade to PRO
+                      </button>
+                    )}
+                    {userTier === 'pro' && (
+                      <button 
+                        onClick={handleManageSubscription} 
+                        disabled={managingSub}
+                        className="w-full py-2 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm flex items-center justify-center gap-2"
+                      >
+                        {managingSub ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings className="w-4 h-4" />}
+                        Manage Subscription
                       </button>
                     )}
                   </div>
