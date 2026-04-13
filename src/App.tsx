@@ -46,6 +46,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<'search' | 'hub' | 'admin'>('search');
   const [savedDeals, setSavedDeals] = useState<any[]>([]);
   const [trackedBrands, setTrackedBrands] = useState<{name: string, hasNewDeals: boolean}[]>([]);
+  const [searchHistory, setSearchHistory] = useState<{query: string, timestamp: string}[]>([]);
 
   useEffect(() => {
     if (userId) {
@@ -63,6 +64,14 @@ export default function App() {
           setTrackedBrands(JSON.parse(tracked));
         } catch (e) {
           console.error("Failed to parse tracked brands", e);
+        }
+      }
+      const history = localStorage.getItem(`search_history_${userId}`);
+      if (history) {
+        try {
+          setSearchHistory(JSON.parse(history));
+        } catch (e) {
+          console.error("Failed to parse search history", e);
         }
       }
     }
@@ -248,6 +257,13 @@ export default function App() {
 
       const data = await findDiscountCodes(searchQuery);
       setResult(data);
+
+      // Add to search history
+      setSearchHistory(prev => {
+        const newHistory = [{ query: searchQuery, timestamp: new Date().toISOString() }, ...prev.filter(h => h.query !== searchQuery)].slice(0, 20);
+        localStorage.setItem(`search_history_${userId}`, JSON.stringify(newHistory));
+        return newHistory;
+      });
     } catch (err: any) {
       if (err?.message && err.message.toLowerCase().includes('api key')) {
         setError('API Key missing or invalid. Please check VITE_GEMINI_API_KEY in Vercel settings.');
@@ -824,6 +840,37 @@ export default function App() {
                     ))}
                   </div>
                 )}
+
+                <h3 className="text-xl font-bold text-slate-900 mt-12 mb-6 flex items-center gap-2">
+                  <Search className="w-5 h-5 text-indigo-500" /> Search History
+                </h3>
+                {searchHistory.length === 0 ? (
+                  <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center">
+                    <p className="text-slate-500 font-medium">No search history yet.</p>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="divide-y divide-slate-100">
+                      {searchHistory.map((item, idx) => (
+                        <div 
+                          key={idx} 
+                          className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer" 
+                          onClick={() => { 
+                            setCurrentView('search'); 
+                            setQuery(item.query);
+                            handleSearch(undefined, item.query); 
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Search className="w-4 h-4 text-slate-400" />
+                            <span className="font-medium text-slate-700">{item.query}</span>
+                          </div>
+                          <span className="text-xs text-slate-400">{new Date(item.timestamp).toLocaleDateString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -880,21 +927,41 @@ export default function App() {
               </button>
             </div>
 
-            {/* Popular Suggestions */}
+            {/* Recent / Popular Suggestions */}
             <div className="mt-4 flex flex-wrap justify-center gap-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider py-1">Popular:</span>
-              {popularStores.map((store) => (
-                <button
-                  key={store}
-                  type="button"
-                  onClick={() => {
-                    setQuery(store);
-                  }}
-                  className="text-xs font-medium px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"
-                >
-                  {store}
-                </button>
-              ))}
+              {searchHistory.length > 0 ? (
+                <>
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider py-1">Recent:</span>
+                  {searchHistory.slice(0, 5).map((item) => (
+                    <button
+                      key={item.query}
+                      type="button"
+                      onClick={() => {
+                        setQuery(item.query);
+                      }}
+                      className="text-xs font-medium px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-full transition-colors"
+                    >
+                      {item.query}
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider py-1">Popular:</span>
+                  {popularStores.map((store) => (
+                    <button
+                      key={store}
+                      type="button"
+                      onClick={() => {
+                        setQuery(store);
+                      }}
+                      className="text-xs font-medium px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"
+                    >
+                      {store}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
 
             {/* Gift Card Discounts Section */}

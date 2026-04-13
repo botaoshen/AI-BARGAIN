@@ -36,7 +36,8 @@ export const DiscountCard: React.FC<DiscountCardProps> = ({ discount, onSave, is
     cashback: { icon: <CreditCard className="w-4 h-4" />, label: "Cashback", color: "text-cyan-600 bg-cyan-50 border-cyan-100" },
     membership: { icon: <ShieldCheck className="w-4 h-4" />, label: "Bank/Membership", color: "text-amber-600 bg-amber-50 border-amber-100" },
     perk: { icon: <Zap className="w-4 h-4" />, label: "Provider Perk", color: "text-violet-600 bg-violet-50 border-violet-100" },
-    sale: { icon: <CalendarDays className="w-4 h-4" />, label: "Sale Alert", color: "text-orange-600 bg-orange-50 border-orange-100" }
+    sale: { icon: <CalendarDays className="w-4 h-4" />, label: "Sale Alert", color: "text-orange-600 bg-orange-50 border-orange-100" },
+    alternative: { icon: <Zap className="w-4 h-4" />, label: "Alternative Deal", color: "text-fuchsia-600 bg-fuchsia-50 border-fuchsia-100" }
   };
 
   const currentType = typeConfig[discount.type] || typeConfig.code;
@@ -97,6 +98,7 @@ export const DiscountCard: React.FC<DiscountCardProps> = ({ discount, onSave, is
              discount.type === 'membership' ? 'Check your Bank/Member App' :
              discount.type === 'perk' ? 'Check your Provider Portal (e.g. Origin)' :
              discount.type === 'sale' ? 'Annual/Special Event Alert' :
+             discount.type === 'alternative' ? 'Consider this alternative product' :
              'Activate via cashback portal'}
           </div>
         )}

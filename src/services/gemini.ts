@@ -25,7 +25,7 @@ export interface DiscountCode {
   confidence: "high" | "medium" | "low";
   verificationStatus?: string;
   lastVerified?: string;
-  type: "code" | "giftcard" | "cashback" | "membership" | "perk" | "sale";
+  type: "code" | "giftcard" | "cashback" | "membership" | "perk" | "sale" | "alternative";
 }
 
 export interface BargainResult {
@@ -151,7 +151,7 @@ export async function generateDiscountEmail(storeName: string): Promise<{subject
 }
 
 export async function findDiscountCodes(query: string): Promise<BargainResult> {
-  const model = "gemini-2.5-pro";
+  const model = "gemini-2.5-flash"; // Switched to flash for much faster response times
   const isUrl = query.startsWith('http://') || query.startsWith('https://');
   const target = isUrl ? `the website at ${query}` : `the store or brand "${query}"`;
   
@@ -169,11 +169,12 @@ export async function findDiscountCodes(query: string): Promise<BargainResult> {
   IF IT'S A SPECIFIC PRODUCT:
   - Search across MULTIPLE Australian retailers (e.g., The Iconic, ASOS, Myer, David Jones, Amazon AU, Catch, JD Sports, Foot Locker, JB Hi-Fi, etc.) to find who is selling this exact item.
   - Find the absolute lowest current price, active sales, or promo codes that apply to this specific item across different stores.
+  - **SPIDER-WEB SEARCH (Alternatives)**: Think like a neural network. What are the direct competitors or previous generations of this product? Quickly check if those alternatives have MASSIVE clearance sales. If a related product is a much better deal, include it!
   - In your JSON response:
     - "storeName" should be the Product Name (e.g., "Best Prices: ${query}").
     - "storeUrl" should be the link to the retailer with the absolute best price.
     - "summary" should summarize the price comparison (e.g., "Retail price is $180, but you can get it for $120 at ASOS using code...").
-    - "codes" array should list the best offers from DIFFERENT retailers. Use the "description" field to clearly state the retailer name and the final price.
+    - "codes" array should list the best offers from DIFFERENT retailers. Use the "description" field to clearly state the retailer name and the final price. If it's an alternative product, set type to "alternative" and describe it clearly (e.g., "Alternative Deal: Bose QC45 is 50% off compared to the Sony you searched for").
   
   IF IT'S A GENERAL STORE / BRAND OR URL:
   - Focus on finding store-wide promo codes, gift card discounts, cashback rates, and provider perks for that specific store.
@@ -197,7 +198,7 @@ export async function findDiscountCodes(query: string): Promise<BargainResult> {
     "summary": "string",
     "codes": [
       {
-        "type": "code" | "giftcard" | "cashback" | "membership" | "perk" | "sale",
+        "type": "code" | "giftcard" | "cashback" | "membership" | "perk" | "sale" | "alternative",
         "code": "string",
         "description": "string",
         "expiry": "string",
