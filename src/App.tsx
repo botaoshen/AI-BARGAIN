@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle, RefreshCw, LogIn, LogOut, User as UserIcon, Heart, ArrowLeft, Settings } from 'lucide-react';
+import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle, RefreshCw, LogIn, LogOut, User as UserIcon, Heart, ArrowLeft, Settings, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResult, GiftCardDeal } from './services/gemini';
 import { DiscountCard } from './components/DiscountCard';
@@ -43,8 +43,9 @@ export default function App() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // Hub State
-  const [currentView, setCurrentView] = useState<'search' | 'hub'>('search');
+  const [currentView, setCurrentView] = useState<'search' | 'hub' | 'admin'>('search');
   const [savedDeals, setSavedDeals] = useState<any[]>([]);
+  const [trackedBrands, setTrackedBrands] = useState<{name: string, hasNewDeals: boolean}[]>([]);
 
   useEffect(() => {
     if (userId) {
@@ -54,6 +55,14 @@ export default function App() {
           setSavedDeals(JSON.parse(saved));
         } catch (e) {
           console.error("Failed to parse saved deals", e);
+        }
+      }
+      const tracked = localStorage.getItem(`tracked_brands_${userId}`);
+      if (tracked) {
+        try {
+          setTrackedBrands(JSON.parse(tracked));
+        } catch (e) {
+          console.error("Failed to parse tracked brands", e);
         }
       }
     }
@@ -186,9 +195,10 @@ export default function App() {
     }
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim() || !userId) return;
+  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
+    if (e) e.preventDefault();
+    const searchQuery = overrideQuery || query;
+    if (!searchQuery.trim() || !userId) return;
 
     // Check limit client-side first for better UX
     if (userTier !== 'admin' && userTier === 'free' && dailyCount >= 1 && extraSearches <= 0) {
@@ -236,7 +246,7 @@ export default function App() {
         localStorage.setItem('bargain_date', new Date().toDateString());
       }
 
-      const data = await findDiscountCodes(query);
+      const data = await findDiscountCodes(searchQuery);
       setResult(data);
     } catch (err: any) {
       if (err?.message && err.message.toLowerCase().includes('api key')) {
@@ -396,6 +406,64 @@ export default function App() {
 
   const popularStores = ['The Iconic', 'ASOS', 'Nike', 'Amazon', 'Uber Eats'];
 
+  // Admin State
+  const [adminStats, setAdminStats] = useState<any>(null);
+  const [loadingAdmin, setLoadingAdmin] = useState(false);
+  const [addCreditsEmail, setAddCreditsEmail] = useState('');
+  const [addCreditsAmount, setAddCreditsAmount] = useState(100);
+  const [addingCredits, setAddingCredits] = useState(false);
+
+  useEffect(() => {
+    if (currentView === 'admin' && userTier === 'admin') {
+      fetchAdminStats();
+    }
+  }, [currentView, userTier]);
+
+  const fetchAdminStats = async () => {
+    setLoadingAdmin(true);
+    try {
+      const res = await fetch('/api/admin/stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminEmail: userEmail })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAdminStats(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingAdmin(false);
+    }
+  };
+
+  const handleAddCredits = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addCreditsEmail || !addCreditsAmount) return;
+    setAddingCredits(true);
+    try {
+      const res = await fetch('/api/admin/add-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminEmail: userEmail, targetEmail: addCreditsEmail, creditsToAdd: Number(addCreditsAmount) })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Successfully added ${addCreditsAmount} credits to ${addCreditsEmail}. New balance: ${data.newCredits}`);
+        setAddCreditsEmail('');
+        fetchAdminStats(); // Refresh list
+      } else {
+        alert(data.error || 'Failed to add credits');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error adding credits');
+    } finally {
+      setAddingCredits(false);
+    }
+  };
+
   const toggleSaveDeal = (deal: any, storeName: string) => {
     if (!userId || userId.startsWith('guest-')) {
       setShowAuthModal(true);
@@ -410,6 +478,25 @@ export default function App() {
         next = [...prev, { storeName, deal }];
       }
       localStorage.setItem(`saved_deals_${userId}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const toggleTrackBrand = (storeName: string) => {
+    if (!userId || userId.startsWith('guest-')) {
+      setShowAuthModal(true);
+      return;
+    }
+    setTrackedBrands(prev => {
+      const isTracked = prev.some(b => b.name === storeName);
+      let next;
+      if (isTracked) {
+        next = prev.filter(b => b.name !== storeName);
+      } else {
+        // Randomly simulate new deals for demonstration purposes
+        next = [...prev, { name: storeName, hasNewDeals: Math.random() > 0.5 }];
+      }
+      localStorage.setItem(`tracked_brands_${userId}`, JSON.stringify(next));
       return next;
     });
   };
@@ -458,6 +545,15 @@ export default function App() {
             
             {userEmail ? (
               <div className="hidden sm:flex items-center gap-4">
+                {userTier === 'admin' && (
+                  <button
+                    onClick={() => setCurrentView(currentView === 'admin' ? 'search' : 'admin')}
+                    className={`text-sm font-medium transition-colors flex items-center gap-1.5 ${currentView === 'admin' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-900'}`}
+                  >
+                    <Shield className="w-4 h-4" />
+                    <span>Admin</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setCurrentView(currentView === 'hub' ? 'search' : 'hub')}
                   className={`text-sm font-medium transition-colors flex items-center gap-1.5 ${currentView === 'hub' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-900'}`}
@@ -507,7 +603,105 @@ export default function App() {
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto px-4 py-12 w-full">
-        {currentView === 'hub' ? (
+        {currentView === 'admin' && userTier === 'admin' ? (
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                <Shield className="w-8 h-8 text-indigo-600" />
+                Admin Dashboard
+              </h2>
+              <button onClick={() => setCurrentView('search')} className="text-indigo-600 font-medium hover:text-indigo-700 flex items-center gap-2">
+                <ArrowLeft className="w-4 h-4" /> Back to Search
+              </button>
+            </div>
+
+            {loadingAdmin || !adminStats ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                    <p className="text-sm font-medium text-slate-500 mb-1">Total Users</p>
+                    <p className="text-3xl font-bold text-slate-900">{adminStats.totalUsers}</p>
+                  </div>
+                  <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                    <p className="text-sm font-medium text-slate-500 mb-1">PRO Users</p>
+                    <p className="text-3xl font-bold text-indigo-600">{adminStats.proUsers}</p>
+                  </div>
+                  <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                    <p className="text-sm font-medium text-slate-500 mb-1">Free Users</p>
+                    <p className="text-3xl font-bold text-slate-600">{adminStats.freeUsers}</p>
+                  </div>
+                </div>
+
+                {/* Add Credits Form */}
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Manual Credit Adjustment</h3>
+                  <form onSubmit={handleAddCredits} className="flex flex-col sm:flex-row gap-4">
+                    <input
+                      type="email"
+                      placeholder="User Email"
+                      value={addCreditsEmail}
+                      onChange={(e) => setAddCreditsEmail(e.target.value)}
+                      className="flex-1 px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                    <input
+                      type="number"
+                      placeholder="Amount"
+                      value={addCreditsAmount}
+                      onChange={(e) => setAddCreditsAmount(Number(e.target.value))}
+                      className="w-32 px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={addingCredits}
+                      className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {addingCredits ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                      Add Credits
+                    </button>
+                  </form>
+                </div>
+
+                {/* User List */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 className="text-lg font-bold text-slate-900">Recent Users</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                        <tr>
+                          <th className="px-6 py-3">Email</th>
+                          <th className="px-6 py-3">Tier</th>
+                          <th className="px-6 py-3">Credits</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {adminStats.users.slice(0, 50).map((u: any) => (
+                          <tr key={u.id} className="hover:bg-slate-50">
+                            <td className="px-6 py-4 font-medium text-slate-900">{u.email || 'N/A'}</td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${u.tier === 'pro' || u.tier === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'}`}>
+                                {u.tier}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 font-medium">{u.search_credits}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : currentView === 'hub' ? (
           <div className="w-full">
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-3xl font-bold text-slate-900">My Hub</h2>
@@ -584,6 +778,48 @@ export default function App() {
                           onSave={() => toggleSaveDeal(saved.deal, saved.storeName)} 
                           isSaved={true} 
                         />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <h3 className="text-xl font-bold text-slate-900 mt-12 mb-6 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-indigo-500" /> Tracked Brands
+                </h3>
+                {trackedBrands.length === 0 ? (
+                  <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center">
+                    <p className="text-slate-500 font-medium">You aren't tracking any brands yet.</p>
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {trackedBrands.map((brand, idx) => (
+                      <div key={idx} className="bg-white rounded-2xl p-4 border border-slate-200 flex items-center justify-between shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                            <ShoppingBag className="w-5 h-5 text-indigo-600" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900">{brand.name}</p>
+                            {brand.hasNewDeals ? (
+                              <p className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                                <Sparkles className="w-3 h-3" /> New deals found!
+                              </p>
+                            ) : (
+                              <p className="text-xs text-slate-500">Checking daily...</p>
+                            )}
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            setCurrentView('search');
+                            setQuery(brand.name);
+                            handleSearch(undefined, brand.name);
+                          }}
+                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Search for deals"
+                        >
+                          <Search className="w-4 h-4" />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -797,11 +1033,18 @@ export default function App() {
                       </a>
                     )}
                     <button
-                      onClick={() => setShowSubModal(true)}
-                      className="flex items-center gap-2 text-sm font-semibold text-white bg-slate-900 px-4 py-2 rounded-xl hover:bg-slate-800 transition-all shadow-sm"
+                      onClick={() => toggleTrackBrand(result.storeName)}
+                      className={`flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all shadow-sm ${
+                        trackedBrands.some(b => b.name === result.storeName)
+                          ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                          : 'bg-slate-900 text-white hover:bg-slate-800'
+                      }`}
                     >
-                      <Clock className="w-4 h-4" />
-                      Subscribe
+                      {trackedBrands.some(b => b.name === result.storeName) ? (
+                        <><CheckCircle2 className="w-4 h-4" /> Tracking</>
+                      ) : (
+                        <><Clock className="w-4 h-4" /> Track Brand</>
+                      )}
                     </button>
                   </div>
                 </div>

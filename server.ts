@@ -15,6 +15,8 @@ import webhookHandler from "./api/webhook.ts";
 import userSyncHandler from "./api/user/sync.ts";
 import userInitHandler from "./api/user/init.ts";
 import userLogSearchHandler from "./api/user/log-search.ts";
+import adminStatsHandler from "./api/admin/stats.ts";
+import adminAddCreditsHandler from "./api/admin/add-credits.ts";
 
 let stripeClient: Stripe | null = null;
 function getStripe() {
@@ -42,6 +44,8 @@ async function startServer() {
   app.post("/api/user/sync", userSyncHandler);
   app.post("/api/user/init", userInitHandler);
   app.post("/api/user/log-search", userLogSearchHandler);
+  app.post("/api/admin/stats", adminStatsHandler);
+  app.post("/api/admin/add-credits", adminAddCreditsHandler);
 
   // Legacy endpoints (if still needed by frontend)
   app.post("/api/subscribe", (req, res) => {
@@ -202,15 +206,21 @@ async function startServer() {
     }
   };
 
-  cron.schedule("0 2 * * 1,4", syncGiftCardDeals);
+  cron.schedule("0 2 * * 1,4", () => {
+    syncGiftCardDeals().catch(error => {
+      console.error("Scheduled syncGiftCardDeals failed:", error);
+    });
+  });
 
   if (dbService.getGiftCardDeals().deals.length === 0) {
-    syncGiftCardDeals();
+    syncGiftCardDeals().catch(error => {
+      console.error("Initial syncGiftCardDeals failed:", error);
+    });
   }
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: { port: 0 } },
       appType: "spa",
     });
     app.use(vite.middlewares);
