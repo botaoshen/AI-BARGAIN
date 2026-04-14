@@ -18,6 +18,7 @@ import userLogSearchHandler from "./api/user/log-search.ts";
 import adminStatsHandler from "./api/admin/stats.ts";
 import adminAddCreditsHandler from "./api/admin/add-credits.ts";
 import adminToggleOgHandler from "./api/admin/toggle-og.ts";
+import claimIconicCodeHandler from "./api/user/claim-iconic-code.ts";
 
 let stripeClient: Stripe | null = null;
 function getStripe() {
@@ -48,6 +49,7 @@ async function startServer() {
   app.post("/api/admin/stats", adminStatsHandler);
   app.post("/api/admin/add-credits", adminAddCreditsHandler);
   app.post("/api/admin/toggle-og", adminToggleOgHandler);
+  app.post("/api/user/claim-iconic-code", claimIconicCodeHandler);
 
   // Legacy endpoints (if still needed by frontend)
   app.post("/api/subscribe", (req, res) => {

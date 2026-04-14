@@ -48,6 +48,8 @@ export default function App() {
   const [savedDeals, setSavedDeals] = useState<any[]>([]);
   const [trackedBrands, setTrackedBrands] = useState<{name: string, hasNewDeals: boolean}[]>([]);
   const [searchHistory, setSearchHistory] = useState<{query: string, timestamp: string}[]>([]);
+  const [claimedIconicCode, setClaimedIconicCode] = useState<string | null>(null);
+  const [claimingIconic, setClaimingIconic] = useState(false);
 
   useEffect(() => {
     if (userId) {
@@ -179,10 +181,35 @@ export default function App() {
       setDealsLastUpdated(response.lastUpdated);
     };
     
+    const checkIconicClaim = async (uid: string) => {
+      try {
+        const res = await fetch('/api/user/claim-iconic-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid })
+        });
+        
+        if (!res.ok) return;
+        
+        const text = await res.text();
+        if (!text) return;
+        
+        const data = JSON.parse(text);
+        if (data.alreadyClaimed) {
+          setClaimedIconicCode(data.code);
+        }
+      } catch (e) {
+        // Silent fail for background check
+      }
+    };
+    
     fetchGiftCards();
+    if (userId && isOG) {
+      checkIconicClaim(userId);
+    }
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [userId, isOG]);
 
   const handleSyncDeals = async () => {
     setSyncingDeals(true);
@@ -203,6 +230,42 @@ export default function App() {
       alert(`Failed to sync: ${e.message}`);
     } finally {
       setSyncingDeals(false);
+    }
+  };
+
+  const handleClaimIconicCode = async () => {
+    if (!userId || !isOG) return;
+    setClaimingIconic(true);
+    try {
+      const res = await fetch('/api/user/claim-iconic-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      
+      const text = await res.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (e) {
+        data = { error: "Invalid server response" };
+      }
+
+      if (res.ok) {
+        setClaimedIconicCode(data.code);
+        if (data.alreadyClaimed) {
+          // Already claimed today
+        } else {
+          alert("Successfully claimed your daily Iconic code!");
+        }
+      } else {
+        alert(data.error || "Failed to claim code");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error connecting to server");
+    } finally {
+      setClaimingIconic(false);
     }
   };
 
@@ -1026,6 +1089,65 @@ export default function App() {
                 </>
               )}
             </div>
+
+            {/* OG Perks Section */}
+            {isOG && (
+              <div className="mt-12 text-left">
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">OG Exclusive Perks</h2>
+                    <p className="text-sm text-slate-500">Daily rewards for our earliest supporters</p>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-3xl p-6 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                    <Sparkles className="w-24 h-24 text-amber-600" />
+                  </div>
+                  
+                  <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="text-center md:text-left">
+                      <h3 className="text-lg font-bold text-slate-900 mb-1">Daily Iconic Code</h3>
+                      <p className="text-sm text-slate-600 max-w-sm">
+                        Claim one unique, high-value discount code for The Iconic every single day.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-3">
+                      {claimedIconicCode ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="px-6 py-3 bg-white border-2 border-dashed border-amber-300 rounded-2xl flex items-center gap-3 shadow-sm">
+                            <span className="font-mono font-bold text-xl text-slate-900 tracking-wider">{claimedIconicCode}</span>
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(claimedIconicCode);
+                                alert("Code copied!");
+                              }}
+                              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-indigo-600"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Claimed for today</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleClaimIconicCode}
+                          disabled={claimingIconic}
+                          className="px-8 py-3 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 transition-all shadow-lg shadow-amber-200 flex items-center gap-2 disabled:opacity-50"
+                        >
+                          {claimingIconic ? <Loader2 className="w-5 h-5 animate-spin" /> : <Ticket className="w-5 h-5" />}
+                          Claim Daily Code
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Gift Card Discounts Section */}
             <div className="mt-12 text-left">
