@@ -63,13 +63,6 @@ async function startServer() {
     }
   });
 
-  app.get("/api/subscriptions", (req, res) => {
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ error: "Email is required" });
-    const subs = dbService.getSubscriptions(email as string);
-    res.json(subs);
-  });
-
   app.post("/api/unsubscribe", (req, res) => {
     const { email, storeName } = req.body;
     dbService.unsubscribe(email, storeName);
