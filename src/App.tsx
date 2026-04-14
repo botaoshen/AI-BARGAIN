@@ -27,6 +27,7 @@ export default function App() {
   // User & Limits State
   const [userId, setUserId] = useState<string | null>(null);
   const [userTier, setUserTier] = useState<'free' | 'pro' | 'admin'>('free');
+  const [isOG, setIsOG] = useState(false);
   const [dailyCount, setDailyCount] = useState(0);
   const [extraSearches, setExtraSearches] = useState(0);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -113,6 +114,7 @@ export default function App() {
         const data = await res.json();
         if (data.user) {
           setUserTier(email === 'botaoshen@gmail.com' ? 'admin' : data.user.tier);
+          setIsOG(!!data.user.isOG);
           setDailyCount(data.dailyCount);
           setExtraSearches(data.extraSearches || 0);
         }
@@ -428,6 +430,7 @@ export default function App() {
   const [addCreditsEmail, setAddCreditsEmail] = useState('');
   const [addCreditsAmount, setAddCreditsAmount] = useState(100);
   const [addingCredits, setAddingCredits] = useState(false);
+  const [togglingOg, setTogglingOg] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentView === 'admin' && userTier === 'admin') {
@@ -477,6 +480,29 @@ export default function App() {
       alert('Error adding credits');
     } finally {
       setAddingCredits(false);
+    }
+  };
+
+  const handleToggleOg = async (userId: string, currentStatus: boolean) => {
+    if (!userEmail) return;
+    setTogglingOg(userId);
+    try {
+      const res = await fetch('/api/admin/toggle-og', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminEmail: userEmail, userId, isOG: !currentStatus })
+      });
+      if (res.ok) {
+        fetchAdminStats();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to toggle OG status');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error toggling OG status');
+    } finally {
+      setTogglingOg(null);
     }
   };
 
@@ -559,35 +585,45 @@ export default function App() {
               )}
             </div>
             
+            {isOG && (
+              <div className="flex items-center gap-1 px-1.5 sm:px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold tracking-wider uppercase border border-amber-200 shadow-sm">
+                <Sparkles className="w-3 h-3" />
+                <span className="hidden sm:inline">OG</span>
+              </div>
+            )}
+            
             {userEmail ? (
-              <div className="hidden sm:flex items-center gap-4">
+              <div className="flex items-center gap-1 sm:gap-4">
                 {userTier === 'admin' && (
                   <button
                     onClick={() => setCurrentView(currentView === 'admin' ? 'search' : 'admin')}
-                    className={`text-sm font-medium transition-colors flex items-center gap-1.5 ${currentView === 'admin' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-900'}`}
+                    className={`p-2 sm:p-0 text-sm font-medium transition-colors flex items-center gap-1.5 rounded-lg ${currentView === 'admin' ? 'text-indigo-600 bg-indigo-50 sm:bg-transparent' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 sm:hover:bg-transparent'}`}
+                    title="Admin"
                   >
-                    <Shield className="w-4 h-4" />
-                    <span>Admin</span>
+                    <Shield className="w-5 h-5 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Admin</span>
                   </button>
                 )}
                 <button
                   onClick={() => setCurrentView(currentView === 'hub' ? 'search' : 'hub')}
-                  className={`text-sm font-medium transition-colors flex items-center gap-1.5 ${currentView === 'hub' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-900'}`}
+                  className={`p-2 sm:p-0 text-sm font-medium transition-colors flex items-center gap-1.5 rounded-lg ${currentView === 'hub' ? 'text-indigo-600 bg-indigo-50 sm:bg-transparent' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 sm:hover:bg-transparent'}`}
+                  title="My Hub"
                 >
-                  <Heart className="w-4 h-4" />
-                  <span>My Hub</span>
+                  <Heart className="w-5 h-5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">My Hub</span>
                 </button>
-                <div className="w-px h-4 bg-slate-200"></div>
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                <div className="hidden sm:block w-px h-4 bg-slate-200"></div>
+                <div className="hidden sm:flex items-center gap-2 text-sm font-medium text-slate-600">
                   <UserIcon className="w-4 h-4" />
-                  {userEmail}
+                  <span className="truncate max-w-[120px]">{userEmail}</span>
                 </div>
                 <button
                   onClick={handleSignOut}
-                  className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1"
+                  className="p-2 sm:p-0 text-sm font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-50 sm:hover:bg-transparent transition-colors flex items-center gap-1 rounded-lg"
+                  title="Sign Out"
                 >
-                  <LogOut className="w-4 h-4" />
-                  <span>Sign Out</span>
+                  <LogOut className="w-5 h-5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Sign Out</span>
                 </button>
               </div>
             ) : (
@@ -596,7 +632,8 @@ export default function App() {
                 className="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1"
               >
                 <LogIn className="w-4 h-4" />
-                Sign In / Sign Up
+                <span className="hidden sm:inline">Sign In / Sign Up</span>
+                <span className="sm:hidden">Sign In</span>
               </button>
             )}
 
@@ -696,6 +733,7 @@ export default function App() {
                           <th className="px-6 py-3">Email</th>
                           <th className="px-6 py-3">Tier</th>
                           <th className="px-6 py-3">Credits</th>
+                          <th className="px-6 py-3 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
@@ -708,6 +746,25 @@ export default function App() {
                               </span>
                             </td>
                             <td className="px-6 py-4 font-medium">{u.search_credits}</td>
+                            <td className="px-6 py-4 text-right">
+                              <button
+                                onClick={() => handleToggleOg(u.id, !!u.is_og)}
+                                disabled={togglingOg === u.id}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                                  u.is_og 
+                                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' 
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }`}
+                              >
+                                {togglingOg === u.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin mx-auto" />
+                                ) : u.is_og ? (
+                                  'Remove OG'
+                                ) : (
+                                  'Make OG'
+                                )}
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -743,6 +800,12 @@ export default function App() {
                         <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${userTier === 'pro' || userTier === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'}`}>
                           {userTier}
                         </span>
+                        {isOG && (
+                          <span className="flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 rounded-md text-xs font-bold tracking-wider uppercase border border-amber-200">
+                            <Sparkles className="w-3 h-3" />
+                            OG
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div>

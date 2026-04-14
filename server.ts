@@ -17,6 +17,7 @@ import userInitHandler from "./api/user/init.ts";
 import userLogSearchHandler from "./api/user/log-search.ts";
 import adminStatsHandler from "./api/admin/stats.ts";
 import adminAddCreditsHandler from "./api/admin/add-credits.ts";
+import adminToggleOgHandler from "./api/admin/toggle-og.ts";
 
 let stripeClient: Stripe | null = null;
 function getStripe() {
@@ -46,6 +47,7 @@ async function startServer() {
   app.post("/api/user/log-search", userLogSearchHandler);
   app.post("/api/admin/stats", adminStatsHandler);
   app.post("/api/admin/add-credits", adminAddCreditsHandler);
+  app.post("/api/admin/toggle-og", adminToggleOgHandler);
 
   // Legacy endpoints (if still needed by frontend)
   app.post("/api/subscribe", (req, res) => {
@@ -172,7 +174,7 @@ async function startServer() {
       }
       const ai = new GoogleGenAI({ apiKey });
       const result = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ parts: [{ text: prompt }] }],
         config: {
           responseMimeType: "application/json",
@@ -212,12 +214,6 @@ async function startServer() {
     });
   });
 
-  if (dbService.getGiftCardDeals().deals.length === 0) {
-    syncGiftCardDeals().catch(error => {
-      console.error("Initial syncGiftCardDeals failed:", error);
-    });
-  }
-
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true, hmr: { port: 0 } },
@@ -230,6 +226,13 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Initial sync after server is up
+    if (dbService.getGiftCardDeals().deals.length === 0) {
+      syncGiftCardDeals().catch(error => {
+        console.error("Initial syncGiftCardDeals failed:", error);
+      });
+    }
   });
 }
 

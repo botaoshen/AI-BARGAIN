@@ -151,7 +151,7 @@ export async function generateDiscountEmail(storeName: string): Promise<{subject
 }
 
 export async function findDiscountCodes(query: string): Promise<BargainResult> {
-  const model = "gemini-2.5-flash"; // Switched to flash for much faster response times
+  const model = "gemini-3-flash-preview"; // Switched to flash for much faster response times
   const isUrl = query.startsWith('http://') || query.startsWith('https://');
   const target = isUrl ? `the website at ${query}` : `the store or brand "${query}"`;
   

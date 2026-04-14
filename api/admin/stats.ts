@@ -19,11 +19,22 @@ export default async function handler(req: any, res: any) {
     
     if (error) throw error;
 
-    const totalUsers = profiles.length;
-    const proUsers = profiles.filter(p => p.tier === 'pro').length;
-    const freeUsers = profiles.filter(p => p.tier === 'free').length;
+    // Fetch auth users to get is_og from user_metadata
+    const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
+    const authMap = new Map<string, boolean>(
+      (authUsers?.users?.map(u => [u.id, u.user_metadata?.is_og || false]) || []) as [string, boolean][]
+    );
 
-    res.status(200).json({ totalUsers, proUsers, freeUsers, users: profiles });
+    const enrichedProfiles = profiles.map(p => ({
+      ...p,
+      is_og: authMap.get(p.id) || false
+    }));
+
+    const totalUsers = enrichedProfiles.length;
+    const proUsers = enrichedProfiles.filter(p => p.tier === 'pro').length;
+    const freeUsers = enrichedProfiles.filter(p => p.tier === 'free').length;
+
+    res.status(200).json({ totalUsers, proUsers, freeUsers, users: enrichedProfiles });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

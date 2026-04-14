@@ -25,6 +25,12 @@ export default async function handler(req: any, res: any) {
       .eq('id', userId)
       .single();
 
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+    let isOG = authUser?.user?.user_metadata?.is_og;
+    if (isOG === undefined) {
+      isOG = email === 'nswitch1101@gmail.com';
+    }
+
     let userTier = email === 'botaoshen@gmail.com' ? 'admin' : 'free';
     let searchCredits = 5;
 
@@ -52,7 +58,7 @@ export default async function handler(req: any, res: any) {
     const dailyCount = searchCredits > 0 ? 0 : 1;
 
     res.status(200).json({ 
-      user: { id: userId, email, tier: userTier }, 
+      user: { id: userId, email, tier: userTier, isOG }, 
       dailyCount: dailyCount, 
       extraSearches: searchCredits 
     });
