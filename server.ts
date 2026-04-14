@@ -8,10 +8,10 @@ import { createClient } from "@supabase/supabase-js";
 import { dbService } from "./src/services/db.ts";
 
 // Import Vercel API handlers
-import createCheckoutSessionHandler from "./src/api/create-checkout-session.ts";
-import createPortalSessionHandler from "./src/api/create-portal-session.ts";
-import verifyCheckoutHandler from "./src/api/verify-checkout.ts";
-import webhookHandler from "./src/api/webhook.ts";
+import createCheckoutSessionHandler from "./api/create-checkout-session.ts";
+import createPortalSessionHandler from "./api/create-portal-session.ts";
+import verifyCheckoutHandler from "./api/verify-checkout.ts";
+import webhookHandler from "./api/webhook.ts";
 import userSyncHandler from "./src/api/user/sync.ts";
 import userInitHandler from "./src/api/user/init.ts";
 import userLogSearchHandler from "./src/api/user/log-search.ts";
