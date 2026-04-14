@@ -1,6 +1,18 @@
 {
   "version": 2,
   "rewrites": [
+    { "source": "/api/user/init", "destination": "/api/user?action=init" },
+    { "source": "/api/user/sync", "destination": "/api/user?action=sync" },
+    { "source": "/api/user/log-search", "destination": "/api/user?action=log-search" },
+    { "source": "/api/user/claim-iconic-code", "destination": "/api/user?action=claim-iconic-code" },
+    { "source": "/api/admin/stats", "destination": "/api/admin?action=stats" },
+    { "source": "/api/admin/add-credits", "destination": "/api/admin?action=add-credits" },
+    { "source": "/api/admin/toggle-og", "destination": "/api/admin?action=toggle-og" },
+    { "source": "/api/create-checkout-session", "destination": "/api/stripe?action=create-checkout" },
+    { "source": "/api/create-portal-session", "destination": "/api/stripe?action=create-portal" },
+    { "source": "/api/verify-checkout", "destination": "/api/stripe?action=verify" },
+    { "source": "/api/subscribe", "destination": "/api/newsletter?action=subscribe" },
+    { "source": "/api/unsubscribe", "destination": "/api/newsletter?action=unsubscribe" },
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"

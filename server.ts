@@ -8,17 +8,11 @@ import { createClient } from "@supabase/supabase-js";
 import { dbService } from "./src/services/db.ts";
 
 // Import Vercel API handlers
-import createCheckoutSessionHandler from "./api/create-checkout-session.ts";
-import createPortalSessionHandler from "./api/create-portal-session.ts";
-import verifyCheckoutHandler from "./api/verify-checkout.ts";
+import userHandler from "./api/user.ts";
+import adminHandler from "./api/admin.ts";
+import stripeHandler from "./api/stripe.ts";
+import newsletterHandler from "./api/newsletter.ts";
 import webhookHandler from "./api/webhook.ts";
-import userSyncHandler from "./api/user/sync.ts";
-import userInitHandler from "./api/user/init.ts";
-import userLogSearchHandler from "./api/user/log-search.ts";
-import adminStatsHandler from "./api/admin/stats.ts";
-import adminAddCreditsHandler from "./api/admin/add-credits.ts";
-import adminToggleOgHandler from "./api/admin/toggle-og.ts";
-import claimIconicCodeHandler from "./api/user/claim-iconic-code.ts";
 
 let stripeClient: Stripe | null = null;
 function getStripe() {
@@ -40,16 +34,36 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes using Vercel handlers
-  app.post("/api/create-checkout-session", createCheckoutSessionHandler);
-  app.post("/api/create-portal-session", createPortalSessionHandler);
-  app.post("/api/verify-checkout", verifyCheckoutHandler);
-  app.post("/api/user/sync", userSyncHandler);
-  app.post("/api/user/init", userInitHandler);
-  app.post("/api/user/log-search", userLogSearchHandler);
-  app.post("/api/admin/stats", adminStatsHandler);
-  app.post("/api/admin/add-credits", adminAddCreditsHandler);
-  app.post("/api/admin/toggle-og", adminToggleOgHandler);
-  app.post("/api/user/claim-iconic-code", claimIconicCodeHandler);
+  app.post("/api/user/:action", (req, res) => {
+    req.query.action = req.params.action;
+    return userHandler(req, res);
+  });
+  app.post("/api/admin/:action", (req, res) => {
+    req.query.action = req.params.action;
+    return adminHandler(req, res);
+  });
+  app.post("/api/stripe/:action", (req, res) => {
+    req.query.action = req.params.action;
+    return stripeHandler(req, res);
+  });
+  app.post("/api/newsletter/:action", (req, res) => {
+    req.query.action = req.params.action;
+    return newsletterHandler(req, res);
+  });
+
+  // Compatibility routes for old endpoints
+  app.post("/api/user/init", (req, res) => { req.query.action = 'init'; return userHandler(req, res); });
+  app.post("/api/user/sync", (req, res) => { req.query.action = 'sync'; return userHandler(req, res); });
+  app.post("/api/user/log-search", (req, res) => { req.query.action = 'log-search'; return userHandler(req, res); });
+  app.post("/api/user/claim-iconic-code", (req, res) => { req.query.action = 'claim-iconic-code'; return userHandler(req, res); });
+  app.post("/api/admin/stats", (req, res) => { req.query.action = 'stats'; return adminHandler(req, res); });
+  app.post("/api/admin/add-credits", (req, res) => { req.query.action = 'add-credits'; return adminHandler(req, res); });
+  app.post("/api/admin/toggle-og", (req, res) => { req.query.action = 'toggle-og'; return adminHandler(req, res); });
+  app.post("/api/create-checkout-session", (req, res) => { req.query.action = 'create-checkout'; return stripeHandler(req, res); });
+  app.post("/api/create-portal-session", (req, res) => { req.query.action = 'create-portal'; return stripeHandler(req, res); });
+  app.post("/api/verify-checkout", (req, res) => { req.query.action = 'verify'; return stripeHandler(req, res); });
+  app.post("/api/subscribe", (req, res) => { req.query.action = 'subscribe'; return newsletterHandler(req, res); });
+  app.post("/api/unsubscribe", (req, res) => { req.query.action = 'unsubscribe'; return newsletterHandler(req, res); });
 
   // Legacy endpoints (if still needed by frontend)
   app.post("/api/subscribe", (req, res) => {
