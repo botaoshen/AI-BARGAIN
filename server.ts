@@ -12,12 +12,12 @@ import createCheckoutSessionHandler from "./api/create-checkout-session.ts";
 import createPortalSessionHandler from "./api/create-portal-session.ts";
 import verifyCheckoutHandler from "./api/verify-checkout.ts";
 import webhookHandler from "./api/webhook.ts";
-import userSyncHandler from "./src/api/user/sync.ts";
-import userInitHandler from "./src/api/user/init.ts";
-import userLogSearchHandler from "./src/api/user/log-search.ts";
-import adminStatsHandler from "./src/api/admin/stats.ts";
-import adminAddCreditsHandler from "./src/api/admin/add-credits.ts";
-import adminToggleOgHandler from "./src/api/admin/toggle-og.ts";
+import userSyncHandler from "./api/user/sync.ts";
+import userInitHandler from "./api/user/init.ts";
+import userLogSearchHandler from "./api/user/log-search.ts";
+import adminStatsHandler from "./api/admin/stats.ts";
+import adminAddCreditsHandler from "./api/admin/add-credits.ts";
+import adminToggleOgHandler from "./api/admin/toggle-og.ts";
 
 let stripeClient: Stripe | null = null;
 function getStripe() {
@@ -29,9 +29,8 @@ function getStripe() {
   return stripeClient;
 }
 
-const app = express();
-
 async function startServer() {
+  const app = express();
   const PORT = 3000;
 
   // Stripe webhook needs raw body
@@ -237,8 +236,4 @@ async function startServer() {
   });
 }
 
-if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
-  startServer();
-}
-
-export default app;
+startServer();

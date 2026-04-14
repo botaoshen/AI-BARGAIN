@@ -59,7 +59,7 @@ export async function getGiftCardDeals(): Promise<GiftCardDealsResponse> {
       }
     }
   } catch (error) {
-    console.error("Failed to fetch gift card deals from API, using fallback:", error);
+    // API might not be available yet or in a different environment
   }
 
   // Fallback data if API fails or is empty

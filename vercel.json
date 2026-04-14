@@ -2,12 +2,8 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/api/admin/(.*)",
-      "destination": "/api/admin.ts"
-    },
-    {
-      "source": "/api/user/(.*)",
-      "destination": "/api/user.ts"
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
       "source": "/(.*)",
