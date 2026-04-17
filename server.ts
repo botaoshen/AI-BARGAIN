@@ -1,11 +1,16 @@
 import "dotenv/config";
 import express from "express";
+
+console.log(`[${new Date().toISOString()}] Server process starting...`);
+
 import { createServer as createViteServer } from "vite";
 import cron from "node-cron";
 import { GoogleGenAI, Type } from "@google/genai";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { dbService } from "./src/services/db.ts";
+
+console.log(`[${new Date().toISOString()}] Core modules imported.`);
 
 // Import Vercel API handlers
 import createCheckoutSessionHandler from "./api/create-checkout-session.ts";
@@ -19,6 +24,7 @@ import adminStatsHandler from "./api/admin/stats.ts";
 import adminAddCreditsHandler from "./api/admin/add-credits.ts";
 import adminToggleOgHandler from "./api/admin/toggle-og.ts";
 import claimIconicCodeHandler from "./api/user/claim-iconic-code.ts";
+import requestGCHandler from "./api/user/request-gc.ts";
 
 let stripeClient: Stripe | null = null;
 function getStripe() {
@@ -31,11 +37,12 @@ function getStripe() {
 }
 
 async function startServer() {
+  console.log(`[${new Date().toISOString()}] Starting server initialization...`);
   const app = express();
   const PORT = 3000;
 
   // Stripe webhook needs raw body
-  app.post("/api/webhook", express.raw({ type: "application/json" }), webhookHandler);
+  console.log(`[${new Date().toISOString()}] Setting up routes...`);
 
   app.use(express.json());
 
@@ -50,6 +57,7 @@ async function startServer() {
   app.post("/api/admin/add-credits", adminAddCreditsHandler);
   app.post("/api/admin/toggle-og", adminToggleOgHandler);
   app.post("/api/user/claim-iconic-code", claimIconicCodeHandler);
+  app.post("/api/user/request-gc", requestGCHandler);
 
   // Legacy endpoints (if still needed by frontend)
   app.post("/api/subscribe", (req, res) => {
@@ -197,9 +205,13 @@ async function startServer() {
           dbService.updateGiftCardDeals(deals);
         }
       }
-    } catch (error) {
-      console.error("Failed to sync gift card deals:", error);
-      throw error;
+    } catch (error: any) {
+      if (error?.message?.includes("suspended") || error?.message?.includes("PERMISSION_DENIED")) {
+        console.error("CRITICAL: Your Gemini API Key has been suspended by Google. Please update your GEMINI_API_KEY in the Settings menu.");
+      } else {
+        console.error("Failed to sync gift card deals:", error);
+      }
+      // We don't throw here to avoid crashing the background cron or startup
     }
   };
 
@@ -210,11 +222,13 @@ async function startServer() {
   });
 
   if (process.env.NODE_ENV !== "production") {
+    console.log(`[${new Date().toISOString()}] Initializing Vite middleware (this may take a few seconds)...`);
     const vite = await createViteServer({
       server: { middlewareMode: true, hmr: { port: 0 } },
       appType: "spa",
     });
     app.use(vite.middlewares);
+    console.log(`[${new Date().toISOString()}] Vite middleware ready.`);
   } else {
     app.use(express.static("dist"));
   }
@@ -222,12 +236,18 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
     
-    // Initial sync after server is up
-    if (dbService.getGiftCardDeals().deals.length === 0) {
-      syncGiftCardDeals().catch(error => {
-        console.error("Initial syncGiftCardDeals failed:", error);
-      });
-    }
+    // Initial sync after server is up - delayed to let the platform recognize the server is ready
+    setTimeout(() => {
+      console.log("Checking if initial gift card sync is needed...");
+      if (dbService.getGiftCardDeals().deals.length === 0) {
+        console.log("Database empty, starting initial gift card deals sync...");
+        syncGiftCardDeals().catch(error => {
+          console.error("Initial syncGiftCardDeals failed:", error);
+        });
+      } else {
+        console.log("Database already contains deals, skipping initial sync.");
+      }
+    }, 5000);
   });
 }
 

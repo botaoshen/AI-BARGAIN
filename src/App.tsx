@@ -51,6 +51,13 @@ export default function App() {
   const [claimedIconicCode, setClaimedIconicCode] = useState<string | null>(null);
   const [claimingIconic, setClaimingIconic] = useState(false);
 
+  // Premium Marketplace State
+  const [showMarketplace, setShowMarketplace] = useState(false);
+  const [showGCRequestModal, setShowGCRequestModal] = useState(false);
+  const [gcRequestData, setGcRequestData] = useState({ storeName: '', targetDiscount: '', additionalInfo: '' });
+  const [requestingGC, setRequestingGC] = useState(false);
+  const [requestSuccess, setRequestSuccess] = useState(false);
+
   useEffect(() => {
     if (userId) {
       const saved = localStorage.getItem(`saved_deals_${userId}`);
@@ -249,6 +256,61 @@ export default function App() {
     }
   };
 
+  const handlePurchaseItem = async (itemType: string) => {
+    if (!userId) {
+      setShowAuthModal(true);
+      return;
+    }
+    setUpgrading(true);
+    setUpgradeError(null);
+    try {
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, email: userEmail, itemType })
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || "Failed to create checkout session");
+      }
+    } catch (err: any) {
+      setUpgradeError(err.message);
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
+  const handleRequestGC = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userId || !gcRequestData.storeName) return;
+    
+    setRequestingGC(true);
+    try {
+      const res = await fetch('/api/user/request-gc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, email: userEmail, ...gcRequestData })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRequestSuccess(true);
+        setTimeout(() => {
+          setShowGCRequestModal(false);
+          setRequestSuccess(false);
+          setGcRequestData({ storeName: '', targetDiscount: '', additionalInfo: '' });
+        }, 3000);
+      } else {
+        alert(data.error || "Request failed");
+      }
+    } catch (err) {
+      alert("Failed to send request");
+    } finally {
+      setRequestingGC(false);
+    }
+  };
+
   const handleClaimIconicCode = async () => {
     if (!userId || !isOG) return;
     setClaimingIconic(true);
@@ -346,8 +408,9 @@ export default function App() {
         return newHistory;
       });
     } catch (err: any) {
-      if (err?.message && (err.message.toLowerCase().includes('api key') || err.message.toLowerCase().includes('google search'))) {
-        setError('API Key missing or invalid, or Google Search tool is not enabled. Please check your Gemini API settings.');
+      const msg = err?.message?.toLowerCase() || "";
+      if (msg.includes('api key') || msg.includes('google search') || msg.includes('suspended') || msg.includes('permission_denied')) {
+        setError('Your Gemini API Key is invalid or has been suspended. Please update it in the Settings menu.');
       } else {
         setError(err?.message || 'Failed to find deals. Please try again later.');
       }
@@ -722,6 +785,13 @@ export default function App() {
             >
               How it works
             </button>
+            <button 
+              onClick={() => setShowMarketplace(true)} 
+              className="px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition-all flex items-center gap-1.5"
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              Store
+            </button>
             {userTier === 'free' && (
               <button 
                 onClick={() => setShowUpgradeModal(true)}
@@ -898,6 +968,13 @@ export default function App() {
                         Upgrade to PRO
                       </button>
                     )}
+                    <button 
+                      onClick={() => setShowMarketplace(true)}
+                      className="w-full py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors text-sm flex items-center justify-center gap-2"
+                    >
+                      <ShoppingBag className="w-4 h-4" />
+                      Premium Marketplace
+                    </button>
                     {userTier === 'pro' && (
                       <button 
                         onClick={handleManageSubscription} 
@@ -1589,6 +1666,203 @@ export default function App() {
                   Got it
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Premium Marketplace Modal */}
+      <AnimatePresence>
+        {showMarketplace && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMarketplace(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-4xl bg-slate-50 rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              <div className="bg-slate-900 p-8 text-white relative shrink-0">
+                <ShoppingBag className="absolute -right-4 -top-4 w-32 h-32 opacity-10 rotate-12" />
+                <div className="flex justify-between items-start relative z-10">
+                  <div>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-[10px] font-bold mb-4 backdrop-blur-sm tracking-widest uppercase">
+                      <Zap className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      Premium Rewards
+                    </div>
+                    <h3 className="text-3xl font-bold mb-2">The Marketplace</h3>
+                    <p className="text-slate-400 max-w-md">Exclusive high-value discount codes and services for our Pro community.</p>
+                  </div>
+                  <button onClick={() => setShowMarketplace(false)} className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors">
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-8 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Item 1: Iconic */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors flex flex-col">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black italic">I.</div>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-slate-900">$20</span>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">AUD</p>
+                      </div>
+                    </div>
+                    <h4 className="text-lg font-bold text-slate-900">THE ICONIC: 75% OFF</h4>
+                    <p className="text-sm text-slate-500 mt-2 mb-6 flex-grow">
+                      Exclusive 75% OFF voucher code. Hand-verified and guaranteed to work today.
+                    </p>
+                    <button
+                      onClick={() => handlePurchaseItem('iconic_premium')}
+                      className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Ticket className="w-4 h-4" />
+                      Purchase Code
+                    </button>
+                  </div>
+
+                  {/* Item 2: Farfetch */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors flex flex-col">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="w-12 h-12 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-900 font-bold text-xs uppercase text-center p-1">FAR FETCH</div>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-slate-900">$15</span>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">AUD</p>
+                      </div>
+                    </div>
+                    <h4 className="text-lg font-bold text-slate-900">FARFETCH: 90% OFF</h4>
+                    <p className="text-sm text-slate-500 mt-2 mb-6 flex-grow">
+                      Rare 90% discount code for selected items. Perfect for high-end luxury fashion.
+                    </p>
+                    <button
+                      onClick={() => handlePurchaseItem('farfetch_premium')}
+                      className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Ticket className="w-4 h-4" />
+                      Purchase Code
+                    </button>
+                  </div>
+
+                  {/* Item 3: Custom Request */}
+                  <div className="md:col-span-2 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 text-white relative overflow-hidden group">
+                    <div className="absolute right-0 bottom-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                      <Mail className="w-32 h-32" />
+                    </div>
+                    <div className="relative z-10">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md">
+                          <Shield className="w-5 h-5" />
+                        </div>
+                        <span className="font-bold text-sm tracking-wide">PRO EXCLUSIVE</span>
+                      </div>
+                      <h4 className="text-2xl font-bold mb-2">Discount GC Purchase Project</h4>
+                      <p className="text-indigo-100/80 max-w-xl mb-6 font-medium">
+                        Looking for a specific store that's not listed? Pro users can request our agent to scour private networks for a custom discounted gift card match.
+                      </p>
+                      <button
+                        onClick={() => {
+                          if (userTier === 'free') {
+                            setShowUpgradeModal(true);
+                          } else {
+                            setShowGCRequestModal(true);
+                          }
+                        }}
+                        className="px-8 py-3 bg-white text-indigo-600 rounded-xl font-bold hover:bg-indigo-50 transition-all shadow-xl shadow-indigo-900/20"
+                      >
+                        Submit Request
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* GC Request Modal */}
+      <AnimatePresence>
+        {showGCRequestModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowGCRequestModal(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-8"
+            >
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">Gift Card Request</h3>
+              <p className="text-slate-500 text-sm mb-6">Tell us what you're looking for and our agents will try to find a match.</p>
+              
+              {requestSuccess ? (
+                <div className="flex flex-col items-center justify-center py-8 text-emerald-600 space-y-3">
+                  <CheckCircle2 className="w-16 h-16" />
+                  <p className="font-bold">Request Submitted!</p>
+                  <p className="text-sm text-slate-400 text-center">We'll email <span className="text-slate-900">{userEmail}</span> as soon as we find a deal.</p>
+                </div>
+              ) : (
+                <form onSubmit={handleRequestGC} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Store Name</label>
+                    <input 
+                      required
+                      type="text"
+                      value={gcRequestData.storeName}
+                      onChange={e => setGcRequestData({...gcRequestData, storeName: e.target.value})}
+                      placeholder="e.g. Myer, David Jones, Amazon AU"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Target Discount (%)</label>
+                    <input 
+                      type="text"
+                      value={gcRequestData.targetDiscount}
+                      onChange={e => setGcRequestData({...gcRequestData, targetDiscount: e.target.value})}
+                      placeholder="e.g. 15% - 20%"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Additional Info</label>
+                    <textarea 
+                      value={gcRequestData.additionalInfo}
+                      onChange={e => setGcRequestData({...gcRequestData, additionalInfo: e.target.value})}
+                      placeholder="Any specific minimum spend or items?"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-medium h-24 resize-none"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={requestingGC}
+                    className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {requestingGC ? <Loader2 className="w-5 h-5 animate-spin" /> : <Mail className="w-5 h-5" />}
+                    Submit Request
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGCRequestModal(false)}
+                    className="w-full py-2 text-slate-400 text-sm font-medium hover:text-slate-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </form>
+              )}
             </motion.div>
           </div>
         )}
