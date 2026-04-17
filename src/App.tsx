@@ -164,8 +164,24 @@ export default function App() {
       }
 
       // Check active session
-      const { data: { session } } = await supabase.auth.getSession();
-      await initUser(session?.user);
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          if (error.message.includes('Refresh Token Not Found') || error.message.includes('invalid_grant')) {
+            console.warn("Auth session expired or invalid, signing out...");
+            await supabase.auth.signOut();
+            await initUser(null);
+          } else {
+            console.error("Supabase getSession error:", error);
+            await initUser(null);
+          }
+        } else {
+          await initUser(session?.user);
+        }
+      } catch (e) {
+        console.error("Auth check failed:", e);
+        await initUser(null);
+      }
     };
 
     checkAuthAndInit();
@@ -330,10 +346,10 @@ export default function App() {
         return newHistory;
       });
     } catch (err: any) {
-      if (err?.message && err.message.toLowerCase().includes('api key')) {
-        setError('API Key missing or invalid. Please check VITE_GEMINI_API_KEY in Vercel settings.');
+      if (err?.message && (err.message.toLowerCase().includes('api key') || err.message.toLowerCase().includes('google search'))) {
+        setError('API Key missing or invalid, or Google Search tool is not enabled. Please check your Gemini API settings.');
       } else {
-        setError('Failed to find deals. Please try again later.');
+        setError(err?.message || 'Failed to find deals. Please try again later.');
       }
       console.error(err);
     } finally {

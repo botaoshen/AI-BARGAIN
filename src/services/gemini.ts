@@ -1,15 +1,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Safely retrieve the API key without crashing the browser on Vercel
+// Safely retrieve the API key
 const getApiKey = () => {
-  // 1. AI Studio environment
+  // Always prefer the standard environment variable injected by the platform
   if (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) {
     return process.env.GEMINI_API_KEY;
   }
   
-  // 2. Vercel / Standard Vite environment (Requires VITE_ prefix)
+  // Fallback for Vite client-side if polyfilled or set in .env
   if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_GEMINI_API_KEY) {
     return (import.meta as any).env.VITE_GEMINI_API_KEY;
+  }
+
+  // Last resort: check if it's on window (some environments do this)
+  if (typeof window !== 'undefined' && (window as any).GEMINI_API_KEY) {
+    return (window as any).GEMINI_API_KEY;
   }
 
   return "";
@@ -167,77 +172,73 @@ export async function findDiscountCodes(query: string): Promise<BargainResult> {
   STEP 2: Execute the appropriate search strategy using your Google Search tool.
   
   IF IT'S A SPECIFIC PRODUCT:
-  - Search across MULTIPLE Australian retailers (e.g., The Iconic, ASOS, Myer, David Jones, Amazon AU, Catch, JD Sports, Foot Locker, JB Hi-Fi, etc.) to find who is selling this exact item.
-  - Find the absolute lowest current price, active sales, or promo codes that apply to this specific item across different stores.
-  - **SPIDER-WEB SEARCH (Alternatives)**: Think like a neural network. What are the direct competitors or previous generations of this product? Quickly check if those alternatives have MASSIVE clearance sales. If a related product is a much better deal, include it!
-  - In your JSON response:
-    - "storeName" should be the Product Name (e.g., "Best Prices: ${query}").
-    - "storeUrl" should be the link to the retailer with the absolute best price.
-    - "summary" should summarize the price comparison (e.g., "Retail price is $180, but you can get it for $120 at ASOS using code...").
-    - "codes" array should list the best offers from DIFFERENT retailers. Use the "description" field to clearly state the retailer name and the final price. If it's an alternative product, set type to "alternative" and describe it clearly (e.g., "Alternative Deal: Bose QC45 is 50% off compared to the Sony you searched for").
+  - Search across MULTIPLE Australian retailers to find who is selling this exact item at the lowest price.
+  - Find active sales or promo codes that apply to this specific item.
+  - Suggest direct competitors or older models if they are much better deals.
   
   IF IT'S A GENERAL STORE / BRAND OR URL:
-  - Focus on finding store-wide promo codes, gift card discounts, cashback rates, and provider perks for that specific store.
-  - Search official sites for newsletter sign-up bonuses, app-exclusive discounts, or student portals.
-  - Search community sites using queries like: site:ozbargain.com.au "${query}"
-  - In your JSON response:
-    - "storeName" is the brand/store name.
-    - "codes" array lists the specific promo codes and perks for that store.
+  - Find store-wide promo codes, gift card discounts, cashback rates, and provider perks.
+  - Search for newsletter sign-up bonuses or app-exclusive discounts.
   
-  STRICT VALIDATION RULES (For both modes):
-  1. Expiration: It is currently ${currentDate}. DO NOT include expired deals.
-  2. UNiDAYS/StudentBeans: Only include if explicitly confirmed.
-  3. Community Sources: If found on OzBargain/Reddit, mark verificationStatus as "To be verified (Community Report)".
-  4. Cashback: Check ShopBack, Cashrewards, TopCashback.
-  5. If the user provided a URL, extract any specific promo codes, hidden deals, or member perks mentioned on that page.
-  
-  You MUST return ONLY valid JSON matching this exact structure (do not include markdown code blocks like \`\`\`json):
-  {
-    "storeName": "string",
-    "storeUrl": "string",
-    "summary": "string",
-    "codes": [
-      {
-        "type": "code" | "giftcard" | "cashback" | "membership" | "perk" | "sale" | "alternative",
-        "code": "string",
-        "description": "string",
-        "expiry": "string",
-        "sourceUrl": "string",
-        "confidence": "high" | "medium" | "low",
-        "verificationStatus": "string",
-        "lastVerified": "string"
-      }
-    ]
-  }`;
+  STRICT RULES:
+  1. DO NOT include expired deals.
+  2. mark verificationStatus as "Verified" if found on official sites, or "Community Report" if from OzBargain/Reddit.
+  3. Provide exact store names and links.`;
 
   try {
     const response = await ai.models.generateContent({
       model,
       contents: [{ parts: [{ text: prompt }] }],
       config: {
-        tools: [{ googleSearch: {} }]
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            storeName: { type: Type.STRING },
+            storeUrl: { type: Type.STRING },
+            summary: { type: Type.STRING },
+            codes: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  type: { type: Type.STRING, enum: ["code", "giftcard", "cashback", "membership", "perk", "sale", "alternative"] },
+                  code: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  expiry: { type: Type.STRING },
+                  sourceUrl: { type: Type.STRING },
+                  confidence: { type: Type.STRING, enum: ["high", "medium", "low"] },
+                  verificationStatus: { type: Type.STRING },
+                  lastVerified: { type: Type.STRING }
+                },
+                required: ["type", "code", "description", "confidence", "sourceUrl"]
+              }
+            }
+          },
+          required: ["storeName", "codes", "summary"]
+        }
       },
     });
 
     if (!response.text) {
-      throw new Error("No response from AI agent.");
+      throw new Error("No response from AI agent. The search might have failed.");
     }
 
-    let rawText = response.text.trim();
-    if (rawText.startsWith('\`\`\`json')) {
-      rawText = rawText.replace(/^\`\`\`json\n/, '').replace(/\n\`\`\`$/, '');
-    } else if (rawText.startsWith('\`\`\`')) {
-      rawText = rawText.replace(/^\`\`\`\n/, '').replace(/\n\`\`\`$/, '');
-    }
-
-    const result = JSON.parse(rawText);
+    const result = JSON.parse(response.text.trim());
     return result as BargainResult;
-  } catch (error) {
+  } catch (error: any) {
     console.error("BargainAgent Error:", error);
-    // Return a fallback structure if parsing fails but we want to avoid a total crash
+    
+    // Check for specific error types to provide better feedback
+    if (error?.message?.includes("Quota") || error?.message?.includes("rate limit")) {
+      throw new Error("API quota exceeded. Please try again in 1 minute.");
+    }
+    
     if (error instanceof SyntaxError) {
       throw new Error("Received malformed data from the search engine. Please try again.");
     }
-    throw error;
+    
+    throw new Error(error?.message || "An unexpected error occurred during the search.");
   }
 }
