@@ -57,14 +57,56 @@ export default async function handler(req: any, res: any) {
         const userId = session.client_reference_id;
         const customerId = session.customer as string;
         const subscriptionId = session.subscription as string;
+        const itemType = session.metadata?.itemType;
 
         if (userId) {
-          await supabaseAdmin.from("profiles").update({
-            tier: "pro",
-            stripe_customer_id: customerId,
-            stripe_subscription_id: subscriptionId,
-            search_credits: 100,
-          }).eq("id", userId);
+          if (itemType === 'iconic_premium') {
+            // Find an available code
+            const { data: codeData } = await supabaseAdmin
+              .from('iconic_codes')
+              .select('id')
+              .is('claimed_by', null)
+              .limit(1)
+              .single();
+
+            if (codeData) {
+              await supabaseAdmin
+                .from('iconic_codes')
+                .update({ 
+                  claimed_by: userId, 
+                  claimed_at: new Date().toISOString(),
+                  purchase_session_id: session.id 
+                })
+                .eq('id', codeData.id);
+            }
+          } else if (itemType === 'farfetch_premium') {
+             // Similarly check farfetch_codes table
+             const { data: codeData } = await supabaseAdmin
+              .from('farfetch_codes')
+              .select('id')
+              .is('claimed_by', null)
+              .limit(1)
+              .single();
+
+            if (codeData) {
+              await supabaseAdmin
+                .from('farfetch_codes')
+                .update({ 
+                  claimed_by: userId, 
+                  claimed_at: new Date().toISOString(),
+                  purchase_session_id: session.id 
+                })
+                .eq('id', codeData.id);
+            }
+          } else {
+            // Default Pro Membership
+            await supabaseAdmin.from("profiles").update({
+              tier: "pro",
+              stripe_customer_id: customerId,
+              stripe_subscription_id: subscriptionId,
+              search_credits: 100,
+            }).eq("id", userId);
+          }
         }
         break;
       }

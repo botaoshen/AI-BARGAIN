@@ -72,6 +72,7 @@ export default async function handler(req: any, res: any) {
       mode: mode,
       client_reference_id: userId,
       customer_email: email || undefined,
+      metadata: { itemType: itemType || 'pro' },
       line_items: lineItems,
       success_url: `${domain}?purchase=success&item=${itemType || 'pro'}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${domain}?purchase=cancelled`,

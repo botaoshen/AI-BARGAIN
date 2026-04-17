@@ -57,6 +57,7 @@ export default function App() {
   const [gcRequestData, setGcRequestData] = useState({ storeName: '', targetDiscount: '', additionalInfo: '' });
   const [requestingGC, setRequestingGC] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState(false);
+  const [purchasedCodes, setPurchasedCodes] = useState<{store: string, code: string, date: string}[]>([]);
 
   useEffect(() => {
     if (userId) {
@@ -109,6 +110,10 @@ export default function App() {
       
       setUserId(id);
       setUserEmail(email);
+
+      if (id) {
+        fetchPurchasedCodes(id);
+      }
 
       try {
         const endpoint = supabaseUser ? '/api/user/sync' : '/api/user/init';
@@ -253,6 +258,28 @@ export default function App() {
       alert(`Failed to sync: ${e.message}`);
     } finally {
       setSyncingDeals(false);
+    }
+  };
+
+  const fetchPurchasedCodes = async (id: string) => {
+    try {
+      const { data: iconic } = await supabase
+        .from('iconic_codes')
+        .select('code, claimed_at')
+        .eq('claimed_by', id);
+      
+      const { data: farfetch } = await supabase
+        .from('farfetch_codes')
+        .select('code, claimed_at')
+        .eq('claimed_by', id);
+
+      const all = [
+        ...(iconic || []).map(c => ({ store: 'THE ICONIC', code: c.code, date: c.claimed_at })),
+        ...(farfetch || []).map(c => ({ store: 'FARFETCH', code: c.code, date: c.claimed_at }))
+      ];
+      setPurchasedCodes(all);
+    } catch (err) {
+      console.error("Failed to fetch purchased codes", err);
     }
   };
 
@@ -990,6 +1017,42 @@ export default function App() {
               </div>
 
               <div className="md:col-span-2">
+                {purchasedCodes.length > 0 && (
+                  <div className="mb-12">
+                    <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600" /> Purchased Premium Codes
+                    </h3>
+                    <div className="grid sm:grid-cols-2 gap-6">
+                      {purchasedCodes.map((c, idx) => (
+                        <div key={idx} className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-3xl p-6 shadow-sm relative group overflow-hidden">
+                          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
+                            <Ticket className="w-20 h-20 text-emerald-600" />
+                          </div>
+                          <div className="relative z-10">
+                            <div className="flex justify-between items-start mb-4">
+                              <span className="text-[10px] font-bold text-emerald-600 bg-white border border-emerald-200 px-2 py-1 rounded-md uppercase tracking-widest">{c.store}</span>
+                              <span className="text-[10px] text-slate-400 font-medium">{new Date(c.date).toLocaleDateString()}</span>
+                            </div>
+                            <div className="bg-white border-2 border-dashed border-emerald-300 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                              <span className="font-mono font-bold text-xl text-slate-900 tracking-wider blur-[2px] group-hover:blur-none transition-all">{c.code}</span>
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(c.code);
+                                  alert("Code copied!");
+                                }}
+                                className="p-2 hover:bg-emerald-50 rounded-xl transition-colors text-emerald-600"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <p className="text-[10px] text-emerald-600/70 font-semibold uppercase tracking-widest text-center mt-3">Verified Premium Voucher</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                   <Heart className="w-5 h-5 text-rose-500" /> Saved Bargains
                 </h3>
@@ -1671,7 +1734,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Premium Marketplace Modal */}
       <AnimatePresence>
         {showMarketplace && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
