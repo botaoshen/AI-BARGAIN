@@ -9,7 +9,6 @@ import { GoogleGenAI, Type } from "@google/genai";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { dbService } from "./src/services/db.ts";
-import { Server as SocketIOServer } from "socket.io";
 
 console.log(`[${new Date().toISOString()}] Core modules imported.`);
 
@@ -27,6 +26,8 @@ import adminToggleOgHandler from "./api/admin/toggle-og.ts";
 import adminBulkAddCodesHandler from "./api/admin/bulk-add-codes.ts";
 import claimIconicCodeHandler from "./api/user/claim-iconic-code.ts";
 import requestGCHandler from "./api/user/request-gc.ts";
+import chatHistoryHandler from "./api/chat/history.ts";
+import chatSendHandler from "./api/chat/send.ts";
 
 let stripeClient: Stripe | null = null;
 function getStripe() {
@@ -61,6 +62,8 @@ async function startServer() {
   app.post("/api/admin/bulk-add-codes", adminBulkAddCodesHandler);
   app.post("/api/user/claim-iconic-code", claimIconicCodeHandler);
   app.post("/api/user/request-gc", requestGCHandler);
+  app.get("/api/chat/history", chatHistoryHandler);
+  app.post("/api/chat/send", chatSendHandler);
 
   // Legacy endpoints (if still needed by frontend)
   app.post("/api/subscribe", (req, res) => {
@@ -299,34 +302,6 @@ async function startServer() {
         console.log("Database already contains deals, skipping initial sync.");
       }
     }, 5000);
-  });
-
-  // Socket.io initialization
-  const io = new SocketIOServer(httpServer, {
-    cors: { origin: "*" }
-  });
-
-  const chatHistory: Record<string, any[]> = {
-    og: [],
-    pro: []
-  };
-
-  io.on("connection", (socket) => {
-    socket.on("join_channel", (channel) => {
-      socket.join(channel);
-      socket.emit("chat_history", chatHistory[channel] || []);
-    });
-
-    socket.on("send_message", ({ channel, message }) => {
-      if (chatHistory[channel]) {
-        const msg = { ...message, timestamp: new Date().toISOString() };
-        chatHistory[channel].push(msg);
-        if (chatHistory[channel].length > 100) {
-          chatHistory[channel].shift(); // Keep only last 100 messages
-        }
-        io.to(channel).emit("new_message", msg);
-      }
-    });
   });
 }
 

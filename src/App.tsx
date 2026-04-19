@@ -5,7 +5,6 @@ import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResu
 import { DiscountCard } from './components/DiscountCard';
 import { supabase } from './lib/supabase';
 import { AuthModal } from './components/AuthModal';
-import { io, Socket } from 'socket.io-client';
 
 export default function App() {
   const [query, setQuery] = useState('');
@@ -44,8 +43,9 @@ export default function App() {
   const [activeChat, setActiveChat] = useState<'og' | 'pro' | null>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [chatTableMissing, setChatTableMissing] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const currentChannelRef = useRef<any>(null);
 
   // Auth State
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -69,30 +69,36 @@ export default function App() {
 
   useEffect(() => {
     if (activeChat) {
-      const newSocket = io(window.location.origin);
-      setSocket(newSocket);
+      setChatTableMissing(false);
+      setChatMessages([]);
       
-      newSocket.on('connect', () => {
-        newSocket.emit('join_channel', activeChat);
-      });
+      // 1. Fetch History
+      fetch(`/api/chat/history?channel=${activeChat}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.error === 'TABLE_MISSING') {
+            setChatTableMissing(true);
+          } else if (data.messages) {
+            setChatMessages(data.messages);
+          }
+        })
+        .catch(console.error);
 
-      newSocket.on('chat_history', (history) => {
-        setChatMessages(history);
-      });
+      // 2. Subscribe to Broadcasts
+      const channel = supabase.channel(`chat_${activeChat}`);
+      
+      channel.on('broadcast', { event: 'new_message' }, ({ payload }) => {
+        setChatMessages(prev => {
+          if (payload.id && prev.some(m => m.id === payload.id)) return prev;
+          return [...prev, payload].slice(-100);
+        });
+      }).subscribe();
 
-      newSocket.on('new_message', (msg) => {
-        setChatMessages(prev => [...prev, msg].slice(-100));
-      });
+      currentChannelRef.current = channel;
 
       return () => {
-        newSocket.disconnect();
+        supabase.removeChannel(channel);
       };
-    } else {
-      if (socket) {
-        socket.disconnect();
-        setSocket(null);
-      }
-      setChatMessages([]);
     }
   }, [activeChat]);
 
@@ -100,21 +106,46 @@ export default function App() {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!socket || !newMessage.trim() || !activeChat) return;
+    if (!newMessage.trim() || !activeChat) return;
     
-    socket.emit('send_message', {
-      channel: activeChat,
-      message: {
-        userId: userId || 'Anonymous',
-        userEmail: userEmail || 'Guest',
-        text: newMessage.trim(),
-        isOG: isOG,
-        tier: userTier
-      }
-    });
+    const msgPayload = {
+      userId: userId || 'Anonymous',
+      userEmail: userEmail || 'Guest',
+      text: newMessage.trim(),
+      isOG: isOG,
+      tier: userTier
+    };
+    
+    const prevMessage = newMessage;
     setNewMessage('');
+    
+    try {
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: activeChat, message: msgPayload })
+      });
+      const data = await res.json();
+      
+      if (data.error === 'TABLE_MISSING') {
+        setChatTableMissing(true);
+        return;
+      }
+      
+      if (data.message && currentChannelRef.current) {
+        setChatMessages(prev => [...prev, data.message].slice(-100));
+        currentChannelRef.current.send({
+          type: 'broadcast',
+          event: 'new_message',
+          payload: data.message
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setNewMessage(prevMessage); // revert
+    }
   };
 
   useEffect(() => {
@@ -2243,7 +2274,25 @@ export default function App() {
               
               {/* Messages Area */}
               <div className="flex-1 overflow-y-auto p-4 bg-slate-50 space-y-4">
-                {chatMessages.length === 0 ? (
+                {chatTableMissing ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-800 p-6 text-center">
+                    <Database className="w-12 h-12 text-slate-300 mb-4" />
+                    <h4 className="font-bold text-lg mb-2">Supabase Setup Required</h4>
+                    <p className="text-sm text-slate-500 mb-4">Please run this SQL in your Supabase dashboard to enable chat:</p>
+                    <div className="bg-slate-900 text-slate-200 p-4 rounded-xl text-xs font-mono text-left w-full overflow-x-auto relative">
+                      <pre>{`create table chat_messages (
+  id bigint generated by default as identity primary key,
+  channel text not null,
+  user_id text not null,
+  user_email text not null,
+  text text not null,
+  is_og boolean default false,
+  tier text default 'free',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);`}</pre>
+                    </div>
+                  </div>
+                ) : chatMessages.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2">
                     <MessageSquare className="w-8 h-8 opacity-50" />
                     <p className="text-sm">No messages yet. Be the first to say hi!</p>
@@ -2261,12 +2310,12 @@ export default function App() {
                           {!isMe && (
                             <div className="flex items-center gap-1.5 mb-1">
                               <span className="text-xs font-bold text-slate-500 truncate max-w-[150px]">
-                                {msg.userEmail.split('@')[0]}
+                                {(msg.userEmail || msg.user_email || 'Guest').split('@')[0]}
                               </span>
                               {msg.tier === 'admin' && (
                                 <Shield className="w-3 h-3 text-indigo-500" />
                               )}
-                              {msg.isOG && (
+                              {(msg.isOG || msg.is_og) && (
                                 <Sparkles className="w-3 h-3 text-amber-500" />
                               )}
                             </div>
@@ -2299,7 +2348,7 @@ export default function App() {
                   />
                   <button
                     type="submit"
-                    disabled={!newMessage.trim() || !socket}
+                    disabled={!newMessage.trim() || chatTableMissing}
                     className="absolute right-2 p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors disabled:opacity-50"
                   >
                     <Send className="w-4 h-4" />
