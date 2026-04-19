@@ -1,5 +1,4 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { dbService } from "../../src/services/db.ts";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -61,13 +60,10 @@ export default async function handler(req: any, res: any) {
 
     if (result.text) {
       const deals = JSON.parse(result.text);
-      if (deals && deals.length > 0) {
-        dbService.updateGiftCardDeals(deals);
-      }
+      res.status(200).json({ success: true, deals, lastUpdated: new Date().toISOString() });
+    } else {
+      res.status(500).json({ error: "Failed to extract deals from Gemini." });
     }
-    
-    const updatedDeals = dbService.getGiftCardDeals();
-    res.status(200).json({ success: true, ...updatedDeals });
   } catch (error: any) {
     console.error("Error syncing gift cards:", error);
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
