@@ -28,6 +28,8 @@ import claimIconicCodeHandler from "./api/user/claim-iconic-code.ts";
 import requestGCHandler from "./api/user/request-gc.ts";
 import chatHistoryHandler from "./api/chat/history.ts";
 import chatSendHandler from "./api/chat/send.ts";
+import giftCardIndexHandler from "./api/gift-cards/index.ts";
+import giftCardSyncHandler from "./api/gift-cards/sync.ts";
 
 let stripeClient: Stripe | null = null;
 function getStripe() {
@@ -64,6 +66,8 @@ async function startServer() {
   app.post("/api/user/request-gc", requestGCHandler);
   app.get("/api/chat/history", chatHistoryHandler);
   app.post("/api/chat/send", chatSendHandler);
+  app.get("/api/gift-cards", giftCardIndexHandler);
+  app.post("/api/gift-cards/sync", giftCardSyncHandler);
 
   // Legacy endpoints (if still needed by frontend)
   app.post("/api/subscribe", (req, res) => {
@@ -116,28 +120,6 @@ async function startServer() {
       res.json({ success: true, message: `Voucher ${code} created for ${searches} searches` });
     } catch (error) {
       res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  app.get("/api/gift-cards", (req, res) => {
-    try {
-      const deals = dbService.getGiftCardDeals();
-      res.json(deals);
-    } catch (error) {
-      console.error("Error fetching gift cards:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  app.post("/api/gift-cards/sync", async (req, res) => {
-    try {
-      await syncGiftCardDeals();
-      const deals = dbService.getGiftCardDeals();
-      res.json({ success: true, ...deals });
-    } catch (error: any) {
-      console.error("Error syncing gift cards:", error);
-      const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-      res.status(500).json({ error: error.message || "Internal server error", apiKeyUsed: apiKey, geminiEnv: process.env.GEMINI_API_KEY, viteGeminiEnv: process.env.VITE_GEMINI_API_KEY });
     }
   });
 
