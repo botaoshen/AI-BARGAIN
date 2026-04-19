@@ -27,6 +27,37 @@ db.exec(`
   )
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS search_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    search_date DATE DEFAULT (DATE('now')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS vouchers (
+    code TEXT PRIMARY KEY,
+    searches INTEGER NOT NULL,
+    used_by TEXT,
+    used_at DATETIME
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gift_card_deals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    store TEXT NOT NULL,
+    offer TEXT NOT NULL,
+    dates TEXT NOT NULL,
+    type TEXT NOT NULL,
+    link TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
 try {
   db.exec(`ALTER TABLE users ADD COLUMN extra_searches INTEGER DEFAULT 0`);
 } catch (e) {
@@ -44,35 +75,6 @@ try {
 } catch (e) {
   // Column might already exist, ignore
 }
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS vouchers (
-    code TEXT PRIMARY KEY,
-    searches INTEGER NOT NULL,
-    used_by TEXT,
-    used_at DATETIME
-  )
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS search_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL,
-    search_date DATE DEFAULT (DATE('now')),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS gift_card_deals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    store TEXT NOT NULL,
-    offer TEXT NOT NULL,
-    dates TEXT NOT NULL,
-    type TEXT NOT NULL
-  )
-`);
 
 export interface Subscription {
   id: number;

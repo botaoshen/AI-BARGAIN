@@ -55,9 +55,9 @@ export default async function handler(req: any, res: any) {
           currency: "aud",
           product_data: {
             name: "Pro Membership",
-            description: "100 searches per month",
+            description: "100 searches per month + 4 Iconic codes",
           },
-          unit_amount: 1000, // $10.00 AUD
+          unit_amount: 4900, // $49.00 AUD
           recurring: {
             interval: "month",
           },

@@ -9,6 +9,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { dbService } from "./src/services/db.ts";
+import { Server as SocketIOServer } from "socket.io";
 
 console.log(`[${new Date().toISOString()}] Core modules imported.`);
 
@@ -23,6 +24,7 @@ import userLogSearchHandler from "./api/user/log-search.ts";
 import adminStatsHandler from "./api/admin/stats.ts";
 import adminAddCreditsHandler from "./api/admin/add-credits.ts";
 import adminToggleOgHandler from "./api/admin/toggle-og.ts";
+import adminBulkAddCodesHandler from "./api/admin/bulk-add-codes.ts";
 import claimIconicCodeHandler from "./api/user/claim-iconic-code.ts";
 import requestGCHandler from "./api/user/request-gc.ts";
 
@@ -56,6 +58,7 @@ async function startServer() {
   app.post("/api/admin/stats", adminStatsHandler);
   app.post("/api/admin/add-credits", adminAddCreditsHandler);
   app.post("/api/admin/toggle-og", adminToggleOgHandler);
+  app.post("/api/admin/bulk-add-codes", adminBulkAddCodesHandler);
   app.post("/api/user/claim-iconic-code", claimIconicCodeHandler);
   app.post("/api/user/request-gc", requestGCHandler);
 
@@ -142,6 +145,54 @@ async function startServer() {
     const stores = [...new Set(allSubs.map(s => s.store_name))];
     for (const store of stores) {
       console.log(`Checking deals for ${store}...`);
+    }
+  });
+
+  // OG Monthly Credit Reset (20th of the month at midnight)
+  // "不可累计" means reset to 50, not add 50.
+  cron.schedule("0 0 20 * *", async () => {
+    console.log(`[${new Date().toISOString()}] Running monthly OG credit reset...`);
+    try {
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        console.error("Supabase credentials missing for monthly reset");
+        return;
+      }
+
+      const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+
+      // We list all users to check metadata. 
+      // For very large user bases, this should be paginated or synced to a queryable column.
+      let { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
+      
+      if (error) {
+        console.error("Failed to list users for OG reset:", error);
+        return;
+      }
+
+      let resetCount = 0;
+      for (const user of users) {
+        const isOG = user.user_metadata?.is_og || user.email === 'nswitch1101@gmail.com';
+        
+        if (isOG) {
+          // Reset to 50 (non-cumulative)
+          const { error: updateError } = await supabaseAdmin
+            .from('profiles')
+            .update({ search_credits: 50 })
+            .eq('id', user.id);
+          
+          if (updateError) {
+            console.error(`Failed to reset credits for user ${user.email}:`, updateError);
+          } else {
+            resetCount++;
+          }
+        }
+      }
+      console.log(`[${new Date().toISOString()}] Monthly OG credit reset complete. Reset ${resetCount} users.`);
+    } catch (err) {
+      console.error("Unexpected error in monthly OG reset:", err);
     }
   });
 
@@ -233,7 +284,7 @@ async function startServer() {
     app.use(express.static("dist"));
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
     
     // Initial sync after server is up - delayed to let the platform recognize the server is ready
@@ -248,6 +299,34 @@ async function startServer() {
         console.log("Database already contains deals, skipping initial sync.");
       }
     }, 5000);
+  });
+
+  // Socket.io initialization
+  const io = new SocketIOServer(httpServer, {
+    cors: { origin: "*" }
+  });
+
+  const chatHistory: Record<string, any[]> = {
+    og: [],
+    pro: []
+  };
+
+  io.on("connection", (socket) => {
+    socket.on("join_channel", (channel) => {
+      socket.join(channel);
+      socket.emit("chat_history", chatHistory[channel] || []);
+    });
+
+    socket.on("send_message", ({ channel, message }) => {
+      if (chatHistory[channel]) {
+        const msg = { ...message, timestamp: new Date().toISOString() };
+        chatHistory[channel].push(msg);
+        if (chatHistory[channel].length > 100) {
+          chatHistory[channel].shift(); // Keep only last 100 messages
+        }
+        io.to(channel).emit("new_message", msg);
+      }
+    });
   });
 }
 

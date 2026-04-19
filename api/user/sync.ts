@@ -18,6 +18,10 @@ export default async function handler(req: any, res: any) {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
+    // Validate if userId is a UUID (logged in user) or random string (guest)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const isUuid = uuidRegex.test(userId);
+
     // Check if user profile exists
     const { data: profile, error: fetchError } = await supabaseAdmin
       .from('profiles')
@@ -25,9 +29,13 @@ export default async function handler(req: any, res: any) {
       .eq('id', userId)
       .single();
 
-    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
-    let isOG = authUser?.user?.user_metadata?.is_og;
-    if (isOG === undefined) {
+    let isOG = false;
+    if (isUuid) {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+      isOG = !!authUser?.user?.user_metadata?.is_og;
+    }
+
+    if (!isOG) {
       isOG = email === 'nswitch1101@gmail.com';
     }
 

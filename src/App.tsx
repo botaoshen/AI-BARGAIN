@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle, RefreshCw, LogIn, LogOut, User as UserIcon, Heart, ArrowLeft, Settings, Shield } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, Sparkles, ShoppingBag, Loader2, ArrowRight, Clock, CheckCircle2, CalendarDays, Mail, Copy, Ticket, CreditCard, ShieldCheck, Zap, AlertCircle, RefreshCw, LogIn, LogOut, User as UserIcon, Heart, ArrowLeft, Settings, Shield, PlusCircle, Database, MessageSquare, Send, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { findDiscountCodes, generateDiscountEmail, getGiftCardDeals, BargainResult, GiftCardDeal } from './services/gemini';
 import { DiscountCard } from './components/DiscountCard';
 import { supabase } from './lib/supabase';
 import { AuthModal } from './components/AuthModal';
+import { io, Socket } from 'socket.io-client';
 
 export default function App() {
   const [query, setQuery] = useState('');
@@ -39,6 +40,13 @@ export default function App() {
   const [redeemingVoucher, setRedeemingVoucher] = useState(false);
   const [voucherMessage, setVoucherMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
+  // Chat State
+  const [activeChat, setActiveChat] = useState<'og' | 'pro' | null>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
   // Auth State
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -58,6 +66,56 @@ export default function App() {
   const [requestingGC, setRequestingGC] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState(false);
   const [purchasedCodes, setPurchasedCodes] = useState<{store: string, code: string, date: string}[]>([]);
+
+  useEffect(() => {
+    if (activeChat) {
+      const newSocket = io(window.location.origin);
+      setSocket(newSocket);
+      
+      newSocket.on('connect', () => {
+        newSocket.emit('join_channel', activeChat);
+      });
+
+      newSocket.on('chat_history', (history) => {
+        setChatMessages(history);
+      });
+
+      newSocket.on('new_message', (msg) => {
+        setChatMessages(prev => [...prev, msg].slice(-100));
+      });
+
+      return () => {
+        newSocket.disconnect();
+      };
+    } else {
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
+      }
+      setChatMessages([]);
+    }
+  }, [activeChat]);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!socket || !newMessage.trim() || !activeChat) return;
+    
+    socket.emit('send_message', {
+      channel: activeChat,
+      message: {
+        userId: userId || 'Anonymous',
+        userEmail: userEmail || 'Guest',
+        text: newMessage.trim(),
+        isOG: isOG,
+        tier: userTier
+      }
+    });
+    setNewMessage('');
+  };
 
   useEffect(() => {
     if (userId) {
@@ -232,12 +290,12 @@ export default function App() {
     };
     
     fetchGiftCards();
-    if (userId && isOG) {
+    if (userId && (isOG || userTier === 'pro' || userTier === 'admin')) {
       checkIconicClaim(userId);
     }
 
     return () => subscription.unsubscribe();
-  }, [userId, isOG]);
+  }, [userId, isOG, userTier]);
 
   const handleSyncDeals = async () => {
     setSyncingDeals(true);
@@ -339,7 +397,7 @@ export default function App() {
   };
 
   const handleClaimIconicCode = async () => {
-    if (!userId || !isOG) return;
+    if (!userId || (!isOG && userTier !== 'pro' && userTier !== 'admin')) return;
     setClaimingIconic(true);
     try {
       const res = await fetch('/api/user/claim-iconic-code', {
@@ -599,6 +657,9 @@ export default function App() {
   const [addCreditsEmail, setAddCreditsEmail] = useState('');
   const [addCreditsAmount, setAddCreditsAmount] = useState(100);
   const [addingCredits, setAddingCredits] = useState(false);
+  const [bulkCodes, setBulkCodes] = useState('');
+  const [bulkBrand, setBulkBrand] = useState('Iconic');
+  const [isBulkAdding, setIsBulkAdding] = useState(false);
   const [togglingOg, setTogglingOg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -649,6 +710,39 @@ export default function App() {
       alert('Error adding credits');
     } finally {
       setAddingCredits(false);
+    }
+  };
+
+  const handleBulkAddCodes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkCodes.trim()) return;
+    
+    setIsBulkAdding(true);
+    try {
+      const codeList = bulkCodes.split(/[\n,]+/).map(c => c.trim()).filter(c => c.length > 0);
+      
+      const response = await fetch('/api/admin/bulk-add-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminEmail: userEmail,
+          codes: codeList,
+          brand: bulkBrand
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        alert(`Successfully added ${data.count} codes for ${bulkBrand}!`);
+        setBulkCodes('');
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (error) {
+      console.error("Bulk add error:", error);
+      alert("Failed to bulk add codes.");
+    } finally {
+      setIsBulkAdding(false);
     }
   };
 
@@ -897,6 +991,48 @@ export default function App() {
                   </form>
                 </div>
 
+                {/* Bulk Add Codes */}
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <Database className="w-5 h-5 text-indigo-600" /> Bulk Add Discount Codes
+                  </h3>
+                  <form onSubmit={handleBulkAddCodes} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Store / Brand</label>
+                        <select 
+                          value={bulkBrand}
+                          onChange={(e) => setBulkBrand(e.target.value)}
+                          className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                        >
+                          <option value="Iconic">Iconic</option>
+                          <option value="Farfetch">Farfetch</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Paste Codes (One per line or comma separated)</label>
+                      <textarea
+                        value={bulkCodes}
+                        onChange={(e) => setBulkCodes(e.target.value)}
+                        placeholder="CODE123&#10;CODE456&#10;..."
+                        className="w-full h-32 px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm leading-relaxed"
+                        required
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={isBulkAdding}
+                        className="px-8 py-3 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {isBulkAdding ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlusCircle className="w-5 h-5" />}
+                        Add Codes to Library
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
                 {/* User List */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                   <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
@@ -1011,6 +1147,43 @@ export default function App() {
                         {managingSub ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings className="w-4 h-4" />}
                         Manage Subscription
                       </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm mt-6">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-indigo-600" /> Community Channels
+                  </h3>
+                  <div className="space-y-3">
+                    {(userTier === 'pro' || userTier === 'admin') ? (
+                      <button 
+                        onClick={() => setActiveChat('pro')}
+                        className="w-full py-3 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-xl font-bold hover:bg-indigo-100 transition-colors flex items-center justify-between px-4"
+                      >
+                        <span className="flex items-center gap-2"><Sparkles className="w-4 h-4"/> PRO Lounge</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <div className="w-full py-3 bg-slate-50 border border-slate-200 text-slate-400 rounded-xl font-medium px-4 flex items-center justify-between opacity-60 cursor-not-allowed">
+                        <span className="flex items-center gap-2"><Sparkles className="w-4 h-4"/> PRO Lounge (Pro Only)</span>
+                        <LogIn className="w-4 h-4" />
+                      </div>
+                    )}
+                    
+                    {(isOG || userTier === 'admin') ? (
+                      <button 
+                        onClick={() => setActiveChat('og')}
+                        className="w-full py-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl font-bold hover:bg-amber-100 transition-colors flex items-center justify-between px-4"
+                      >
+                        <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500"/> OG Club</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <div className="w-full py-3 bg-slate-50 border border-slate-200 text-slate-400 rounded-xl font-medium px-4 flex items-center justify-between opacity-60 cursor-not-allowed">
+                        <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-slate-300"/> OG Club (OG Only)</span>
+                        <LogIn className="w-4 h-4" />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1246,16 +1419,16 @@ export default function App() {
               )}
             </div>
 
-            {/* OG Perks Section */}
-            {isOG && (
+            {/* VIP Perks Section */}
+            {(isOG || userTier === 'pro' || userTier === 'admin') && (
               <div className="mt-12 text-left">
                 <div className="flex items-center gap-2 mb-6">
                   <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
                     <Sparkles className="w-5 h-5 text-amber-600" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-slate-900">OG Exclusive Perks</h2>
-                    <p className="text-sm text-slate-500">Daily rewards for our earliest supporters</p>
+                    <h2 className="text-xl font-bold text-slate-900">Premium Perks</h2>
+                    <p className="text-sm text-slate-500">Free rewards for our loyal supporters</p>
                   </div>
                 </div>
 
@@ -1266,9 +1439,11 @@ export default function App() {
                   
                   <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="text-center md:text-left">
-                      <h3 className="text-lg font-bold text-slate-900 mb-1">Daily Iconic Code</h3>
+                      <h3 className="text-lg font-bold text-slate-900 mb-1">Free Iconic Codes</h3>
                       <p className="text-sm text-slate-600 max-w-sm">
-                        Claim one unique, high-value discount code for The Iconic every single day.
+                        {userTier === 'pro' || userTier === 'admin' 
+                          ? "As a PRO member, you can claim up to 4 free Iconic codes every month."
+                          : "As an OG member, you can claim up to 2 free Iconic codes every month."}
                       </p>
                     </div>
 
@@ -1278,6 +1453,7 @@ export default function App() {
                           <div className="px-6 py-3 bg-white border-2 border-dashed border-amber-300 rounded-2xl flex items-center gap-3 shadow-sm">
                             <span className="font-mono font-bold text-xl text-slate-900 tracking-wider">{claimedIconicCode}</span>
                             <button 
+                              type="button"
                               onClick={() => {
                                 navigator.clipboard.writeText(claimedIconicCode);
                                 alert("Code copied!");
@@ -1287,16 +1463,25 @@ export default function App() {
                               <Copy className="w-4 h-4" />
                             </button>
                           </div>
-                          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Claimed for today</span>
+                          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Recent Claim</span>
+                          <button
+                            type="button"
+                            onClick={handleClaimIconicCode}
+                            disabled={claimingIconic}
+                            className="mt-2 text-xs font-bold text-amber-600 hover:text-amber-700 underline"
+                          >
+                            Claim Another (if limit allows)
+                          </button>
                         </div>
                       ) : (
                         <button
+                          type="button"
                           onClick={handleClaimIconicCode}
                           disabled={claimingIconic}
                           className="px-8 py-3 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 transition-all shadow-lg shadow-amber-200 flex items-center gap-2 disabled:opacity-50"
                         >
                           {claimingIconic ? <Loader2 className="w-5 h-5 animate-spin" /> : <Ticket className="w-5 h-5" />}
-                          Claim Daily Code
+                          Claim Free Code
                         </button>
                       )}
                     </div>
@@ -1976,7 +2161,8 @@ export default function App() {
                   {[
                     { icon: <Zap className="w-4 h-4" />, text: "100 real-time AI searches per month" },
                     { icon: <Clock className="w-4 h-4" />, text: "30-day free trial", badge: "Limited time" },
-                    { icon: <Ticket className="w-4 h-4" />, text: "Pro membership exclusive discount codes (Coming soon)" },
+                    { icon: <Ticket className="w-4 h-4" />, text: "4 free Iconic 25% off codes per month" },
+                    { icon: <Sparkles className="w-4 h-4" />, text: "PRO member exclusive channel" },
                     { icon: <ShieldCheck className="w-4 h-4" />, text: "Paid membership access (UNiDAYS, Student Beans, Entertainment Group)" },
                     { icon: <CreditCard className="w-4 h-4" />, text: "Cancel anytime" }
                   ].map((feature, i) => (
@@ -2012,7 +2198,7 @@ export default function App() {
                     {upgrading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Start 1-Month Free Trial"}
                   </button>
                   <p className="text-xs text-slate-400 text-center mt-2">
-                    $10.00/month after trial. Auto-renews.
+                    A$49.00/month after trial. Auto-renews.
                   </p>
                   
                   <button
@@ -2027,6 +2213,104 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Chat Overlay Modal */}
+      <AnimatePresence>
+        {activeChat && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/40 backdrop-blur-sm"
+          >
+            <div className="bg-white w-full sm:w-[600px] h-[90vh] sm:h-[80vh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+              {/* Header */}
+              <div className={`p-4 border-b flex items-center justify-between text-white ${activeChat === 'pro' ? 'bg-indigo-600' : 'bg-amber-600'}`}>
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-white/90" />
+                  <div>
+                    <h3 className="font-bold">{activeChat === 'pro' ? 'PRO Lounge' : 'OG Club'}</h3>
+                    <p className="text-xs text-white/80">Live Community Chat</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setActiveChat(null)}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {/* Messages Area */}
+              <div className="flex-1 overflow-y-auto p-4 bg-slate-50 space-y-4">
+                {chatMessages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2">
+                    <MessageSquare className="w-8 h-8 opacity-50" />
+                    <p className="text-sm">No messages yet. Be the first to say hi!</p>
+                  </div>
+                ) : (
+                  chatMessages.map((msg, i) => {
+                    const isMe = msg.userId === userId;
+                    return (
+                      <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] rounded-2xl p-3 ${
+                          isMe 
+                            ? (activeChat === 'pro' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-amber-600 text-white rounded-br-none') 
+                            : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
+                        }`}>
+                          {!isMe && (
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="text-xs font-bold text-slate-500 truncate max-w-[150px]">
+                                {msg.userEmail.split('@')[0]}
+                              </span>
+                              {msg.tier === 'admin' && (
+                                <Shield className="w-3 h-3 text-indigo-500" />
+                              )}
+                              {msg.isOG && (
+                                <Sparkles className="w-3 h-3 text-amber-500" />
+                              )}
+                            </div>
+                          )}
+                          <p className={`text-sm ${isMe ? 'text-white' : 'text-slate-700'}`}>{msg.text}</p>
+                          <span className={`text-[10px] block mt-1 ${isMe ? 'text-white/70 text-right' : 'text-slate-400'}`}>
+                            {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={chatBottomRef} />
+              </div>
+
+              {/* Message Input */}
+              <div className="p-4 bg-white border-t border-slate-200">
+                <form 
+                  onSubmit={handleSendMessage}
+                  className="relative flex items-center"
+                >
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type a message..."
+                    maxLength={500}
+                    className="w-full pl-4 pr-12 py-3 bg-slate-100 border-transparent focus:bg-white focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 rounded-2xl outline-none transition-all text-sm"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newMessage.trim() || !socket}
+                    className="absolute right-2 p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
