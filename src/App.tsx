@@ -1285,6 +1285,60 @@ export default function App() {
                   </div>
                 )}
 
+                {userTier === 'pro' && (
+                  <>
+                    <h3 className="text-xl font-bold text-slate-900 mt-12 mb-6 flex items-center gap-2">
+                      <Zap className="w-5 h-5 text-indigo-500" /> PRO Radar
+                    </h3>
+                    <div className="bg-gradient-to-r from-slate-900 to-indigo-950 rounded-3xl p-6 md:p-8 shadow-xl text-white relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-500 pointer-events-none">
+                        <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+                      </div>
+                      
+                      <div className="relative z-10">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/10 pb-6 mb-6">
+                          <div>
+                            <div className="text-[10px] uppercase tracking-widest text-indigo-300 font-bold mb-1 flex items-center gap-1.5"><Sparkles className="w-3 h-3" /> Exclusive Monitoring</div>
+                            <h4 className="text-2xl font-bold flex items-center gap-2">Meta Ray-Ban Smart Glasses</h4>
+                            <p className="text-slate-400 text-sm mt-1">We're aggressively tracking global drops and hidden retailer codes.</p>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              setCurrentView('search');
+                              setQuery("Meta Ray-Ban smart glasses lowest price");
+                              handleSearch(undefined, "Meta Ray-Ban smart glasses lowest price");
+                            }}
+                            className="bg-indigo-500 hover:bg-indigo-400 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all flex items-center gap-2"
+                          >
+                            <Search className="w-4 h-4" /> Deep Scan
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
+                            <span className="text-xs text-slate-400 uppercase tracking-widest font-semibold block mb-1">Target Price</span>
+                            <span className="text-2xl font-bold tracking-tight">$349 <span className="text-sm font-medium text-slate-500">AUD</span></span>
+                          </div>
+                          <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
+                            <span className="text-xs text-slate-400 uppercase tracking-widest font-semibold block mb-1">Current Lowest</span>
+                            <span className="text-2xl font-bold tracking-tight text-emerald-400">$390 <span className="text-sm font-medium text-emerald-600">AUD</span></span>
+                            <span className="text-[10px] block mt-1 text-slate-400">Via Sunglass Hut (with PRO discount)</span>
+                          </div>
+                          <div className="bg-black/20 rounded-2xl p-4 border border-white/5 flex items-center justify-between">
+                            <div>
+                              <span className="text-xs text-slate-400 uppercase tracking-widest font-semibold block mb-1">Status</span>
+                              <span className="text-amber-400 font-bold flex items-center gap-1.5"><Zap className="w-4 h-4" /> Monitoring</span>
+                            </div>
+                            <div className="w-10 h-10 rounded-full border border-amber-400/30 flex items-center justify-center animate-pulse">
+                              <div className="w-4 h-4 bg-amber-400 rounded-full"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <h3 className="text-xl font-bold text-slate-900 mt-12 mb-6 flex items-center gap-2">
                   <Clock className="w-5 h-5 text-indigo-500" /> Tracked Brands
                 </h3>
