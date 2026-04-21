@@ -1,0 +1,53 @@
+{
+  "lastUpdated": "2026-04-21T08:00:00Z",
+  "deals": [
+    {
+      "title": "10% Cashback on $100 Uber eGift Cards",
+      "store": "ShopBack",
+      "offer": "10% Cashback",
+      "dates": "Latest Offer",
+      "type": "this_week",
+      "link": "https://www.ozbargain.com.au/node/955942"
+    },
+    {
+      "title": "$400 Crown Gifts Digital Gift Card for $350",
+      "store": "Crown Gifts",
+      "offer": "$50 Off",
+      "dates": "First 1000 Orders",
+      "type": "ongoing",
+      "link": "https://www.ozbargain.com.au/node/955732"
+    },
+    {
+      "title": "10% off TCN Shop, Pub & Bar, Pamper, Cinema",
+      "store": "Coles",
+      "offer": "10% off In-Store",
+      "dates": "Starts Tomorrow",
+      "type": "next_week",
+      "link": "https://www.ozbargain.com.au/node/955712"
+    },
+    {
+      "title": "Earn 20x Everyday Rewards Points on Apple Gift Cards",
+      "store": "Woolworths",
+      "offer": "20x EDR Points",
+      "dates": "Limit 10/day",
+      "type": "this_week",
+      "link": "https://www.ozbargain.com.au/node/955018"
+    },
+    {
+      "title": "10% off Uber Gift Cards",
+      "store": "Samsung Wallet",
+      "offer": "10% off",
+      "dates": "Latest Offer",
+      "type": "ongoing",
+      "link": "https://www.ozbargain.com.au/node/955491"
+    },
+    {
+      "title": "10% off Xbox eGift Cards",
+      "store": "Prezzee",
+      "offer": "10% off",
+      "dates": "Latest Offer",
+      "type": "ongoing",
+      "link": "https://www.ozbargain.com.au/node/955011"
+    }
+  ]
+}

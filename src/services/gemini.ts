@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import localGiftCards from '../data/gift-cards.json';
 
 // Safely retrieve the API key
 const getApiKey = () => {
@@ -68,53 +69,7 @@ export async function getGiftCardDeals(): Promise<GiftCardDealsResponse> {
   }
 
   // Fallback data if API fails or is empty
-  return {
-    deals: [
-      {
-        title: "Apple Gift Cards",
-        store: "Woolworths",
-        offer: "20x Everyday Rewards points",
-        dates: "Latest Offer",
-        type: "this_week"
-      },
-      {
-        title: "Ultimate, Webjet & Timezone",
-        store: "Woolworths",
-        offer: "20x Everyday Rewards points",
-        dates: "Latest Offer",
-        type: "this_week"
-      },
-      {
-        title: "TCN Cinema, Pamper, Pub & Bar",
-        store: "Coles",
-        offer: "2,000 Flybuys points",
-        dates: "Latest Offer",
-        type: "this_week"
-      },
-      {
-        title: "TCN Gift, Him, Her, Baby & Restaurant",
-        store: "Coles",
-        offer: "1,000 Flybuys points on $50",
-        dates: "Latest Offer",
-        type: "next_week"
-      },
-      {
-        title: "Woolworths & Big W",
-        store: "Everyday Gifting",
-        offer: "3% off + 1x EDR point per dollar",
-        dates: "Ongoing",
-        type: "ongoing"
-      },
-      {
-        title: "Woolworths, Amazon, Airbnb & Bunnings",
-        store: "Qantas Marketplace",
-        offer: "3x Qantas points",
-        dates: "Ongoing",
-        type: "ongoing"
-      }
-    ],
-    lastUpdated: new Date().toISOString()
-  };
+  return localGiftCards as GiftCardDealsResponse;
 }
 
 export async function generateDiscountEmail(storeName: string): Promise<{subject: string, body: string}> {
