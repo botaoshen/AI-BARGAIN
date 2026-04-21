@@ -31,10 +31,18 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS search_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
+    query TEXT,
     search_date DATE DEFAULT (DATE('now')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `);
+
+// Migration for existing databases
+try {
+  db.exec("ALTER TABLE search_logs ADD COLUMN query TEXT");
+} catch (e) {
+  // Column might already exist
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS vouchers (
@@ -164,9 +172,21 @@ export const dbService = {
     return result ? result.count : 0;
   },
 
-  logSearch: (userId: string) => {
-    const stmt = db.prepare('INSERT INTO search_logs (user_id) VALUES (?)');
-    return stmt.run(userId);
+  logSearch: (userId: string, query?: string) => {
+    const stmt = db.prepare('INSERT INTO search_logs (user_id, query) VALUES (?, ?)');
+    return stmt.run(userId, query || null);
+  },
+
+  getTrendingSearches: (limit: number = 5) => {
+    const stmt = db.prepare(`
+      SELECT query, COUNT(*) as count 
+      FROM search_logs 
+      WHERE query IS NOT NULL AND query != ''
+      GROUP BY LOWER(query) 
+      ORDER BY count DESC 
+      LIMIT ?
+    `);
+    return stmt.all(limit) as { query: string, count: number }[];
   },
 
   subscribe: (email: string, storeName: string) => {

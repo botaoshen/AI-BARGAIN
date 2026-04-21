@@ -58,6 +58,7 @@ export default function App() {
   const [searchHistory, setSearchHistory] = useState<{query: string, timestamp: string}[]>([]);
   const [claimedIconicCode, setClaimedIconicCode] = useState<string | null>(null);
   const [claimingIconic, setClaimingIconic] = useState(false);
+  const [trendingSearches, setTrendingSearches] = useState<{query: string, count: number}[]>([]);
 
   // Premium Marketplace State
   const [showMarketplace, setShowMarketplace] = useState(false);
@@ -297,6 +298,18 @@ export default function App() {
       setGiftCardDeals(response.deals);
       setDealsLastUpdated(response.lastUpdated);
     };
+
+    const fetchTrending = async () => {
+      try {
+        const res = await fetch('/api/trending');
+        if (res.ok) {
+          const data = await res.json();
+          setTrendingSearches(data);
+        }
+      } catch (e) {
+        console.warn("Trending searches API failed", e);
+      }
+    };
     
     const checkIconicClaim = async (uid: string) => {
       try {
@@ -321,6 +334,7 @@ export default function App() {
     };
     
     fetchGiftCards();
+    fetchTrending();
     if (userId && (isOG || userTier === 'pro' || userTier === 'admin')) {
       checkIconicClaim(userId);
     }
@@ -517,6 +531,16 @@ export default function App() {
       const data = await findDiscountCodes(searchQuery);
       setResult(data);
 
+      // Log for trending
+      fetch('/api/trending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: searchQuery.toLowerCase().trim(), userId })
+      }).then(() => {
+        // Refresh trending list after successful log
+        fetch('/api/trending').then(res => res.json()).then(setTrendingSearches).catch(() => {});
+      }).catch(err => console.warn("Failed to log trending search", err));
+
       // Add to search history
       setSearchHistory(prev => {
         const newHistory = [{ query: searchQuery, timestamp: new Date().toISOString() }, ...prev.filter(h => h.query !== searchQuery)].slice(0, 20);
@@ -680,7 +704,7 @@ export default function App() {
     }
   };
 
-  const popularStores = ['The Iconic', 'ASOS', 'Nike', 'Amazon', 'Uber Eats'];
+  const popularStores = ['Meta Ray-Ban', 'The Iconic', 'ASOS', 'Nike', 'Amazon', 'Uber Eats'];
 
   // Admin State
   const [adminStats, setAdminStats] = useState<any>(null);
@@ -872,7 +896,7 @@ export default function App() {
                   )}
                 </span>
               )}
-              {userTier === 'pro' && (
+              {(userTier === 'pro' || userTier === 'admin') && (
                 <span className="text-indigo-200 border-l border-indigo-500 ml-1 pl-2">
                   <span className="text-white font-bold">{extraSearches} left</span>
                 </span>
@@ -1285,7 +1309,7 @@ export default function App() {
                   </div>
                 )}
 
-                {userTier === 'pro' && (
+                {(userTier === 'pro' || userTier === 'admin') && (
                   <>
                     <h3 className="text-xl font-bold text-slate-900 mt-12 mb-6 flex items-center gap-2">
                       <Zap className="w-5 h-5 text-indigo-500" /> PRO Radar
@@ -1503,6 +1527,41 @@ export default function App() {
                 </>
               )}
             </div>
+
+            {/* Trending Keywords Ranking */}
+            {trendingSearches.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-slate-100 max-w-lg mx-auto">
+                <div className="flex items-center justify-center gap-2 mb-4 text-slate-400">
+                  <RefreshCw className="w-4 h-4 animate-spin-slow" />
+                  <span className="text-xs font-bold uppercase tracking-widest">Real-time Trending</span>
+                </div>
+                <div className="flex flex-wrap justify-center gap-x-6 gap-y-4">
+                  {trendingSearches.map((item, idx) => (
+                    <button
+                      key={item.query}
+                      className="flex items-center gap-2 group transition-all"
+                      onClick={() => {
+                        setQuery(item.query);
+                        handleSearch(undefined, item.query);
+                      }}
+                    >
+                      <span className={`flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${
+                        idx === 0 ? 'bg-amber-100 text-amber-600 border border-amber-200' :
+                        idx === 1 ? 'bg-slate-100 text-slate-500 border border-slate-200' :
+                        idx === 2 ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                        'bg-slate-50 text-slate-400 border border-slate-100'
+                      }`}>
+                        {idx + 1}
+                      </span>
+                      <span className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 border-b border-transparent group-hover:border-indigo-200 transition-all capitalize">
+                        {item.query}
+                      </span>
+                      {idx === 0 && <Sparkles className="w-3 h-3 text-amber-500 animate-pulse" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* VIP Perks Section */}
             {(isOG || userTier === 'pro' || userTier === 'admin') && (

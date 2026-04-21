@@ -30,6 +30,7 @@ import chatHistoryHandler from "./api/chat/history.ts";
 import chatSendHandler from "./api/chat/send.ts";
 import giftCardIndexHandler from "./api/gift-cards/index.ts";
 import giftCardSyncHandler from "./api/gift-cards/sync.ts";
+import trendingHandler from "./api/trending.ts";
 
 let stripeClient: Stripe | null = null;
 function getStripe() {
@@ -68,6 +69,8 @@ async function startServer() {
   app.post("/api/chat/send", chatSendHandler);
   app.get("/api/gift-cards", giftCardIndexHandler);
   app.post("/api/gift-cards/sync", giftCardSyncHandler);
+  app.get("/api/trending", trendingHandler);
+  app.post("/api/trending", trendingHandler);
 
   // Legacy endpoints (if still needed by frontend)
   app.post("/api/subscribe", (req, res) => {
