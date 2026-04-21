@@ -219,7 +219,21 @@ export default function App() {
         if (data.user) {
           setUserTier(email === 'botaoshen@gmail.com' ? 'admin' : data.user.tier);
           setIsOG(!!data.user.isOG);
-          setDailyCount(data.dailyCount);
+          
+          // For guests, prefer local storage count if API returns 0
+          if (!supabaseUser) {
+             const localCount = parseInt(localStorage.getItem('bargain_count') || '0');
+             const localDate = localStorage.getItem('bargain_date');
+             const today = new Date().toDateString();
+             if (localDate === today && localCount > 0) {
+               setDailyCount(localCount);
+             } else {
+               setDailyCount(data.dailyCount);
+             }
+          } else {
+            setDailyCount(data.dailyCount);
+          }
+          
           setExtraSearches(data.extraSearches || 0);
         }
       } catch (err) {
