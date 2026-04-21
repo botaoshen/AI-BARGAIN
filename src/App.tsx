@@ -525,6 +525,13 @@ export default function App() {
         if (logData.extraSearches !== undefined) {
           setExtraSearches(logData.extraSearches);
         }
+        
+        // Sync to localStorage for guests/free users in case of refresh
+        localStorage.setItem('bargain_count', logData.newCount.toString());
+        localStorage.setItem('bargain_date', new Date().toDateString());
+        if (logData.extraSearches !== undefined) {
+          localStorage.setItem('bargain_extra', logData.extraSearches.toString());
+        }
       } catch (e) {
         // Fallback to local storage for Vercel
         const currentLocalCount = parseInt(localStorage.getItem('bargain_count') || '0');
@@ -906,7 +913,9 @@ export default function App() {
                   {extraSearches > 0 ? (
                     <span className="text-indigo-600 font-bold">{Math.max(0, 1 - dailyCount) + extraSearches} left</span>
                   ) : (
-                    <>{Math.max(0, 1 - dailyCount)} left</>
+                    <span className={Math.max(0, 1 - dailyCount) === 0 ? "text-rose-500 font-bold animate-pulse" : "font-medium"}>
+                      {Math.max(0, 1 - dailyCount)} left
+                    </span>
                   )}
                 </span>
               )}
